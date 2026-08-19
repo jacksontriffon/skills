@@ -117,6 +117,7 @@ for entry in "${SOURCES[@]}"; do
 
   # A source that drops a skill has to drop its lock row too, or the lockfile keeps naming a
   # directory the sync no longer writes and nobody can tell the record from the tree.
+  had="$(awk -F'\t' -v s="$source" '$2 == s { print $1 }' "$OLD_LOCK")"
   awk -F'\t' -v s="$source" '$2 != s' "$NEW_LOCK" > "$TMP/keep" && mv "$TMP/keep" "$NEW_LOCK"
 
   for subdir in $subdirs; do
@@ -136,6 +137,15 @@ for entry in "${SOURCES[@]}"; do
       printf '%s\t%s\t%s\t%s\t%s\n' "$name" "$source" "$ref" "$sha" "$date" >> "$NEW_LOCK"
       echo "  $name"
     done
+  done
+
+  # The row is gone but the directory is not: a dropped skill keeps loading, sourceless, until
+  # something deletes it. Only names this source owned last run are candidates, so a skill the
+  # project owns — which has no lock row at all — is never in reach.
+  for name in $had; do
+    awk -F'\t' -v n="$name" -v s="$source" '$1 == n && $2 == s { found = 1 } END { exit !found }' "$NEW_LOCK" && continue
+    rm -rf "${DEST:?}/$name"
+    echo "  removed $name — no longer upstream"
   done
 
   echo

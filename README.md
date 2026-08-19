@@ -68,9 +68,9 @@ chmod +x .claude/scripts/sync-skills.sh
 ```
 
 With no configuration it vendors this repo. Every run re-clones each source, replaces one directory
-per skill under `.claude/skills/`, re-applies that project's deltas, and rewrites
-`.claude/skills.lock`. It only touches skills that exist upstream, so the project's own skills
-survive.
+per skill under `.claude/skills/`, deletes the directories that source no longer ships, re-applies
+that project's deltas, and rewrites `.claude/skills.lock`. Only skills a source has vendored before
+are in reach of that deletion, so the project's own skills survive.
 
 ```bash
 .claude/scripts/sync-skills.sh                          # every source at its locked commit
