@@ -4,11 +4,12 @@ Claude Code skills that belong to no single project. One source of truth, consum
 
 | Skill | What it does |
 |---|---|
+| `business-metrics` | Reduces a business to seven dials, then its growth rate and profit ceiling at SOM |
 | `content-review` | Line-by-line review of a draft against nine rules — tense, voice, sentence length, word choice, cuts |
 | `grill-batch` | Resolves a queue of wayfinder decision tickets in one pass instead of one per session |
 
 `grill-batch` assumes the wayfinder map and ticket model from
-[`mattpocock/skills`](https://github.com/mattpocock/skills); the other one stands alone.
+[`mattpocock/skills`](https://github.com/mattpocock/skills); the other two stand alone.
 
 ## Using them
 
