@@ -37,7 +37,7 @@ Values are an example. Fill every row from what you are given, asking for all ga
 | Payback period | 1.9 months |
 | LTV:CAC | 5.2 |
 | → Self-funded growth | 4.2×/yr |
-| → Time to SOM | 3 years |
+| → Time to SOM | 2.3 years |
 
 ```
 CAC                = Cost per click ÷ Click-to-paid
@@ -48,16 +48,14 @@ Self-funded growth = Profit ÷ Ad spend
 Time to SOM        = ln(SOM ÷ Customers) ÷ ln(Self-funded growth)
 ```
 
-From a $10,000 seed, every dollar of profit becomes next year's ad spend, capped at SOM:
+From a $10,000 seed, every dollar of profit becomes next year's ad spend:
 
 | Year | Ad spend | Profit | Customers | Growth rate |
 |---|---|---|---|---|
 | 0 | $10,000 seed | $42,000 | 293 | — |
 | 1 | $42,000 | $179,000 | 1,242 | 4.2× |
 | 2 | $179,000 | $760,000 | 5,263 | 4.2× |
-| 3 | $289,800 — SOM cap | $1,227,000 | 8,500 | 1.6× |
-
-Compounding and profit are the same money spent twice. Profit shows up when growth stops.
+| 3 | $760,000 | $3,220,000 | 22,296 | 4.2× |
 
 ## At SOM — 8,500 customers, 483,000 clicks
 
