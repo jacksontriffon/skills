@@ -32,8 +32,6 @@ Values are an example. Fill every row from what you are given, asking for all ga
 
 ## Growth rate
 
-SOM is the customers the machine can realistically capture, 1–10% of the serviceable market.
-
 | Input | Value |
 |---|---|
 | Payback period | 1.9 months |
@@ -62,6 +60,8 @@ From a $10,000 seed, every dollar of profit becomes next year's ad spend, capped
 Compounding and profit are the same money spent twice. Profit shows up when growth stops.
 
 ## At SOM — 8,500 customers, 483,000 clicks
+
+SOM is the customers the machine can realistically capture, 1–10% of the serviceable market.
 
 | Dial | Value |
 |---|---|
