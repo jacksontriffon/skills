@@ -1,6 +1,6 @@
 ---
 name: business-metrics
-description: Reduce any subscription, e-commerce, or paid-acquisition business to seven numbers, then state the marketing goal implied by its SOM. Use this whenever someone asks about unit economics, CAC, LTV, ROAS, ad budgets, market sizing, or "will this business make money." Also use it when someone shares a pile of marketing numbers and wants them simplified, or asks what ad spend is needed to hit a revenue or profit target. Trigger even if the person never says "unit economics" — questions like "how much should I spend on ads," "what should I charge," or "how many customers do I need" are all this skill.
+description: Reduce any subscription, e-commerce, or paid-acquisition business to seven numbers, then state a profit goal — either the one the person gives, or the ceiling implied by its SOM. Use this whenever someone asks about unit economics, CAC, LTV, ROAS, ad budgets, market sizing, or "will this business make money." Also use it when someone shares a pile of marketing numbers and wants them simplified, or asks what ad spend is needed to hit a revenue or profit target. Trigger even if the person never says "unit economics" — questions like "how much should I spend on ads," "what should I charge," or "how many customers do I need" are all this skill.
 ---
 
 # Business Metrics
@@ -32,16 +32,31 @@ Profit per 1,000     = Gross revenue × (1 − Running Costs %) − Ad spend
 
 ## The goal
 
-Ask for (or estimate) a SOM — the realistic number of customers they can capture, usually 1–10% of the addressable market.
+Profit is always the end goal — never clicks or ad spend for their own sake. Ask which one applies:
+
+**A. They gave you a profit goal.** Work backward from it:
 
 ```
-Clicks required = SOM ÷ Click-to-paid
-Marketing goal   = Clicks required × Cost per click
+Profit per click    = Profit per 1,000 clicks ÷ 1,000
+Clicks required     = Profit goal ÷ Profit per click
+Customers required  = Clicks required × Click-to-paid
+Ad spend required   = Clicks required × Cost per click
 ```
 
-State it as one line:
+Then check `Customers required` against SOM — the realistic number of customers they can capture, usually 1–10% of the addressable market (ask for it, or estimate from TAM/SAM/SOM). If `Customers required` exceeds SOM, the goal is not reachable: say so, and fall back to case B for the actual ceiling.
 
-> To reach a SOM of **N** customers, you need **X** clicks and **$Y** in ad spend.
+> To hit **$G** in profit, you need **X** clicks (**N** customers) and **$Y** in ad spend.
+
+**B. No profit goal given.** Estimate the ceiling from SOM instead:
+
+```
+Profit per click = Profit per 1,000 clicks ÷ 1,000
+Clicks required   = SOM ÷ Click-to-paid
+Ad spend          = Clicks required × Cost per click
+Profit ceiling    = Clicks required × Profit per click
+```
+
+> At a SOM of **N** customers, the profit ceiling is **$P**, needing **X** clicks and **$Y** in ad spend.
 
 ## Output format
 
@@ -59,4 +74,6 @@ Table, then the goal line. That's the whole answer — do not add LTV, CAC, ROAS
 | Running Costs | 28.6% of revenue |
 | Profit per 1,000 clicks | $2,542 |
 
-> To reach a SOM of **8,500 customers**, you need **483,000 clicks** and **$304,000** in ad spend.
+No profit goal was given, so estimate the ceiling from SOM (8,500 customers):
+
+> At a SOM of **8,500 customers**, the profit ceiling is **$1,227,800**, needing **483,000 clicks** and **$289,800** in ad spend.
