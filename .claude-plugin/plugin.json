@@ -1,0 +1,8 @@
+{
+  "name": "jacksontriffon-skills",
+  "description": "Portable Claude Code skills — Arc-style landing page UI, line-by-line content review, and batch decision resolution.",
+  "version": "0.1.0",
+  "author": { "name": "SJ Triffon" },
+  "homepage": "https://github.com/jacksontriffon/skills",
+  "license": "MIT"
+}

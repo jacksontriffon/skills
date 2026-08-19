@@ -1,0 +1,3 @@
+interface:
+  display_name: "Grill Batch"
+  short_description: "Resolve a queue of decision tickets in one pass"

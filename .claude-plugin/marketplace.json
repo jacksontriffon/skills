@@ -1,0 +1,11 @@
+{
+  "name": "jacksontriffon",
+  "owner": { "name": "SJ Triffon" },
+  "plugins": [
+    {
+      "name": "jacksontriffon-skills",
+      "source": "./",
+      "description": "Portable Claude Code skills — Arc-style landing page UI, line-by-line content review, and batch decision resolution."
+    }
+  ]
+}
