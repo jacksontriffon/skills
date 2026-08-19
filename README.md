@@ -4,12 +4,11 @@ Claude Code skills that belong to no single project. One source of truth, consum
 
 | Skill | What it does |
 |---|---|
-| `arc-hero` | Arc.net-style landing page heroes, navbars, scalloped dividers, corner gradients, pill CTAs |
 | `content-review` | Line-by-line review of a draft against nine rules — tense, voice, sentence length, word choice, cuts |
 | `grill-batch` | Resolves a queue of wayfinder decision tickets in one pass instead of one per session |
 
 `grill-batch` assumes the wayfinder map and ticket model from
-[`mattpocock/skills`](https://github.com/mattpocock/skills); the other two stand alone.
+[`mattpocock/skills`](https://github.com/mattpocock/skills); the other one stands alone.
 
 ## Using them
 
