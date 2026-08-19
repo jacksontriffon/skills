@@ -30,6 +30,18 @@ Running costs are every cost the business carries — payment fees, app-store cu
 
 Values are an example. Fill every row from what you are given, asking for all gaps in one question.
 
+## Running costs
+
+| Cost | % of revenue |
+|---|---|
+| App-store cut | 15.0% |
+| Salaries | 5.0% |
+| Payment fees | 3.0% |
+| Hosting | 2.0% |
+| Tax | 2.0% |
+| Tools | 1.6% |
+| **Total** | **28.6%** |
+
 ## Growth rate
 
 | Input | Value |
@@ -57,9 +69,17 @@ From a $10,000 seed, every dollar of profit becomes next year's ad spend:
 | 2 | $179,000 | $760,000 | 5,263 | 4.2× |
 | 3 | $760,000 | $3,220,000 | 22,296 | 4.2× |
 
-## At SOM — 8,500 customers, 483,000 clicks
+## TAM, SAM, SOM
 
-SOM is the customers the machine can realistically capture, 1–10% of the serviceable market.
+| Market | Customers | Who they are | Where | What the number is |
+|---|---|---|---|---|
+| TAM | 2,000,000 | Everyone who has the problem, at any price | Worldwide | The whole market if it were all ours |
+| SAM | 170,000 | Those the product actually serves and can be sold to today | United States | The slice we can reach with this product, language, and payment rails |
+| SOM | 8,500 | Those we can win against incumbents with our ad spend | United States | 5% of SAM — the realistic ceiling the machine drives toward |
+
+Cite the source and year for each figure. SOM is 1–10% of SAM.
+
+## At SOM — 8,500 customers, 483,000 clicks
 
 | Dial | Value |
 |---|---|
