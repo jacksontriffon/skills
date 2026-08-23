@@ -11,7 +11,71 @@ Claude Code skills that belong to no single project. One source of truth, consum
 `grill-batch` assumes the wayfinder map and ticket model from
 [`mattpocock/skills`](https://github.com/mattpocock/skills); the other two stand alone.
 
-## Using them
+## Setting up a project
+
+Six steps from an empty repo to skills that load on the first turn. Each links to the section
+that explains it.
+
+**1. Choose vendored or plugin.** A project any cloud session touches — claude.ai/code, GitHub
+Actions, the mobile or desktop app — has to vendor; a plugin is not there when the container
+starts. A project only ever opened on your own machine can install the plugin instead and skip to
+step 6. [Why](#choosing-vendored-or-plugin) · **never both**.
+
+**2. Drop the sync script in.**
+
+```bash
+mkdir -p .claude/scripts
+curl -fsSL https://raw.githubusercontent.com/jacksontriffon/skills/main/scripts/sync-skills.sh \
+  -o .claude/scripts/sync-skills.sh
+chmod +x .claude/scripts/sync-skills.sh
+```
+
+**3. Name the sources** — skip this to vendor only this repo. Most projects want Matt Pocock's
+alongside it, since that is where the main flow lives. Write `.claude/skills.sources`:
+
+```
+# owner/repo | default ref | dirs holding one subdirectory per skill
+jacksontriffon/skills|main|skills
+mattpocock/skills|main|skills/engineering skills/productivity
+```
+
+[More on sources](#more-than-one-source).
+
+**4. Sync, then commit what it wrote.**
+
+```bash
+.claude/scripts/sync-skills.sh
+git add .claude/skills .claude/skills.lock .claude/scripts .claude/skills.sources
+git commit -m "vendor claude code skills"
+```
+
+`.claude/skills/` is the part that has to be committed — it is what arrives with the clone.
+[`skills.lock`](#skillslock) records where each directory came from.
+
+**5. Point the skills at your tracker.** If you took Matt's, run `/setup-matt-pocock-skills`
+once. It asks which issue tracker this repo uses, what triage labels you apply, and where
+generated docs live, then writes the answers to `docs/agents/issue-tracker.md` — which
+`/triage`, `/to-spec`, and `/to-tickets` all read. Commit that file too.
+
+**6. Restart Claude Code.** Skills are discovered at startup, so a session already running will
+not see them. Type `/` to check: a vendored skill is listed under its bare name, a plugin one
+under `jacksontriffon-skills:`.
+
+### The flow the skills run in
+
+Matt's skills chain into one pass from a rough idea to a reviewed PR:
+
+```
+/grill-with-docs  →  /to-spec  →  /to-tickets  →  /implement  →  /code-review
+stress-test          write it up  split it        build it       review it
+```
+
+`/ask-matt` picks the right one when you are unsure. The three skills in *this* repo sit around
+that spine rather than inside it: `/content-review` over any prose the flow produces,
+`/arc-hero` when the ticket is landing-page UI, and `/grill-batch` to clear a queue of wayfinder
+decision tickets in one session instead of one each.
+
+## Choosing: vendored or plugin
 
 ### On a local machine — install as a plugin
 
@@ -57,20 +121,11 @@ twice — once as `/content-review`, once as `/jacksontriffon-skills:content-rev
 
 ## `sync-skills.sh`
 
-[`scripts/sync-skills.sh`](scripts/sync-skills.sh) does the vendoring. Drop it into a project once:
-
-```bash
-mkdir -p .claude/scripts
-curl -fsSL https://raw.githubusercontent.com/jacksontriffon/skills/main/scripts/sync-skills.sh \
-  -o .claude/scripts/sync-skills.sh
-chmod +x .claude/scripts/sync-skills.sh
-.claude/scripts/sync-skills.sh
-```
-
-With no configuration it vendors this repo. Every run re-clones each source, replaces one directory
-per skill under `.claude/skills/`, deletes the directories that source no longer ships, re-applies
-that project's deltas, and rewrites `.claude/skills.lock`. Only skills a source has vendored before
-are in reach of that deletion, so the project's own skills survive.
+[`scripts/sync-skills.sh`](scripts/sync-skills.sh) does the vendoring, and steps 2 to 4 above are
+all it takes to start. With no configuration it vendors this repo. Every run re-clones each source,
+replaces one directory per skill under `.claude/skills/`, deletes the directories that source no
+longer ships, re-applies that project's deltas, and rewrites `.claude/skills.lock`. Only skills a
+source has vendored before are in reach of that deletion, so the project's own skills survive.
 
 ```bash
 .claude/scripts/sync-skills.sh                          # every source at its locked commit
