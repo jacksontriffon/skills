@@ -1,0 +1,44 @@
+name: Kitchen · bootstrap
+
+# /kitchen-setup dispatches this once. It creates every label kitchen.json's `labels` names, and
+# sets the runner variables from its `ci`, so a project's first loop tick finds both. Running it
+# again changes nothing that is already right.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Create the labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node .claude/kitchen/scripts/doctor.mjs --labels | while IFS=$'\t' read -r name color description; do
+            if gh label create "$name" --color "$color" --description "$description" 2>/dev/null; then
+              echo "created  $name"
+            else
+              echo "exists   $name"
+            fi
+          done
+
+      # A repository variable needs a token with admin rights on the repo, which GITHUB_TOKEN
+      # never has, so this only says what to set.
+      - name: Say which runner variables to set
+        run: |
+          {
+            echo "## Runner variables"
+            echo
+            echo "Settings → Secrets and variables → Actions → Variables, if they differ from GitHub's own runners:"
+            echo
+            echo '```'
+            node .claude/kitchen/scripts/kitchen.mjs variables
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"

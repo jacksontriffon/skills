@@ -1,0 +1,128 @@
+name: Kitchen · shoot design
+
+# The design half of /evidence's table. design-server.sh serves kitchen.json's design folder
+# wherever it runs, but a container that cannot take the shot posts the design as `uncaptured`.
+# A runner serves, shoots and pushes the shot to evidence/<pr> instead.
+on:
+  workflow_dispatch:
+    inputs:
+      design:
+        description: The export to shoot — a file name in kitchen.json's design folder, e.g. <name>.dc.html
+        type: string
+        required: true
+      chips:
+        description: Comma-separated screens, one shot each — a chip label, or a `>`-separated tap path for an export with no rail, e.g. Settings > Profile
+        type: string
+        required: true
+      shot-prefix:
+        description: The PR number — the shots go to its evidence/<pr> branch
+        type: string
+        required: true
+      viewport:
+        description: desktop for an export with a rail of states, phone for one driven like the app
+        type: choice
+        options: [desktop, phone]
+        default: desktop
+      full-page:
+        description: Capture the whole scrollable page, for a card below the fold
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  FORCE_COLOR: 3
+
+jobs:
+  shoot:
+    runs-on: ${{ vars.KITCHEN_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read the kitchen config
+        run: node .claude/kitchen/scripts/kitchen.mjs env >>"$GITHUB_ENV"
+
+      - name: Check the export is committed
+        env:
+          DESIGN: ${{ inputs.design }}
+        run: |
+          if [ ! -f "$KITCHEN_DESIGN/$DESIGN" ]; then
+            echo "::error::$KITCHEN_DESIGN/$DESIGN is not committed on this ref — a person exports it from Claude Design, per /design-setup step 2"
+            echo "design not committed: $DESIGN" >>"$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          if [ ! -d "$KITCHEN_DESIGN/_ds" ]; then
+            echo "::warning::$KITCHEN_DESIGN/_ds is missing, so the design renders with fallback fonts and empty component boxes"
+          fi
+
+      - name: Pick the Node version
+        id: node
+        run: echo "version=$(cat .nvmrc 2>/dev/null || cat .node-version 2>/dev/null || echo lts/*)" >>"$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+
+      - name: Install
+        run: .claude/kitchen/scripts/install.sh
+
+      - name: Install the browser capture.mjs drives
+        run: npx --no-install playwright install --with-deps chromium
+
+      - name: Shoot each chip
+        env:
+          DESIGN: ${{ inputs.design }}
+          CHIPS: ${{ inputs.chips }}
+          VIEWPORT: ${{ inputs.viewport }}
+          FULL_PAGE: ${{ inputs.full-page }}
+        run: |
+          base="$(.claude/kitchen/scripts/design-server.sh start)"
+          url="$base/$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$DESIGN")"
+          mkdir -p "$RUNNER_TEMP/shots"
+          size=()
+          if [ "$VIEWPORT" = desktop ]; then size=(--desktop); fi
+          if [ "$FULL_PAGE" = true ]; then size+=(--full-page); fi
+          IFS=',' read -ra chips <<<"$CHIPS"
+          for chip in "${chips[@]}"; do
+            chip="$(echo "$chip" | xargs)"
+            [ -n "$chip" ] || continue
+            slug="$(echo "$chip" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-|-$//g')"
+            clicks=()
+            IFS='>' read -ra taps <<<"$chip"
+            for tap in "${taps[@]}"; do
+              clicks+=(--click "$(echo "$tap" | xargs)")
+            done
+            node .claude/kitchen/scripts/capture.mjs "${size[@]}" \
+              --url "$url" "${clicks[@]}" \
+              --out "$RUNNER_TEMP/shots/$slug-design.png"
+          done
+          .claude/kitchen/scripts/design-server.sh stop
+
+      - name: Upload the shots as a workflow artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: design-shots-${{ github.run_id }}
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: warn
+
+      - name: Push the shots to evidence/<pr>
+        env:
+          SHOT_PREFIX: ${{ inputs.shot-prefix }}
+        run: |
+          shopt -s nullglob
+          shots=("$RUNNER_TEMP"/shots/*.png)
+          if [ "${#shots[@]}" -eq 0 ]; then
+            echo "::error::the run took no screenshots"
+            exit 1
+          fi
+          {
+            echo "## Shots"
+            echo
+            echo "| File | URL |"
+            echo "| --- | --- |"
+          } >>"$GITHUB_STEP_SUMMARY"
+          .claude/kitchen/scripts/push-shots.sh "$SHOT_PREFIX" "$RUNNER_TEMP/shots" | tee "$RUNNER_TEMP/urls.tsv"
+          awk -F'\t' '{ print "| " $1 " | " $2 " |" }' "$RUNNER_TEMP/urls.tsv" >>"$GITHUB_STEP_SUMMARY"

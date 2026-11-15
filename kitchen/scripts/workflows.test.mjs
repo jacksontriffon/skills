@@ -1,18 +1,21 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
+import { WORKFLOWS } from "./doctor.mjs";
 import { denylist } from "./kitchen.mjs";
+import { exists, ROOT, workflow as workflowPath } from "./layout.mjs";
 
-const ROOT = new URL("../../../", import.meta.url);
-const read = (path) => readFileSync(new URL(path, ROOT), "utf8");
+const read = (path) => readFileSync(join(ROOT, path), "utf8");
 
 const DENYLIST = denylist();
 
 const LINUX = "${{ vars.KITCHEN_RUNNER || 'ubuntu-latest' }}";
-const MAC = "${{ vars.KITCHEN_MAC_RUNNER || 'macos-15' }}";
+const MAC = "${{ vars.KITCHEN_MAC_RUNNER || 'macos-latest' }}";
 
-const WORKFLOWS = ["pr-preview.yml", "shoot-expo-web.yml", "verify-expo.yml"];
+
+const BACKENDS = [/drizzle/i, /better[- ]?auth/i, /posthog/i, /supabase/i, /\bturbo\b/i, /mongo/i];
 
 const jobBlock = (text, job) => {
   const start = text.indexOf(`\n  ${job}:\n`);
@@ -22,92 +25,88 @@ const jobBlock = (text, job) => {
   return next === -1 ? rest : rest.slice(0, next + 1);
 };
 
-const runners = (text) =>
-  [...text.matchAll(/^\s*runs-on:\s*(.+?)\s*$/gm)].map((match) => match[1]);
+const runners = (text) => [...text.matchAll(/^\s*runs-on:\s*(.+?)\s*$/gm)].map((match) => match[1]);
 
-const workflow = (file) => read(`.github/workflows/${file}`);
+const workflow = (name) => read(workflowPath(name));
 
-const SHARED = [
-  ...WORKFLOWS.map((file) => ({ file, text: workflow(file) })),
-  { file: "ci.yml test job", text: jobBlock(workflow("ci.yml"), "test") },
-];
+const step = (text, name) => {
+  const start = text.indexOf(`- name: ${name}`);
+  assert.notEqual(start, -1, `no step named ${name}`);
+  const next = text.indexOf("\n      - ", start + 1);
+  return next === -1 ? text.slice(start) : text.slice(start, next);
+};
 
-describe("a shared workflow names no project", () => {
-  for (const { file, text } of SHARED) {
-    it(`${file} carries nothing from kitchen-denylist.txt`, () => {
-      const lower = text.toLowerCase();
-      assert.deepEqual(
-        DENYLIST.filter((literal) => lower.includes(literal)),
-        [],
-      );
+describe("every kitchen workflow", () => {
+  for (const name of WORKFLOWS) {
+    describe(name, () => {
+      it("is where the layout puts it", () => assert.ok(exists(`.github/workflows/kitchen-${name}.yml`)));
+
+      it("carries nothing from kitchen-denylist.txt", () => {
+        const lower = workflow(name).toLowerCase();
+        assert.deepEqual(DENYLIST.filter((literal) => lower.includes(literal)), []);
+      });
+
+      it("names no backend an adapter owns", () => {
+        const text = workflow(name);
+        assert.deepEqual(BACKENDS.filter((pattern) => pattern.test(text)).map(String), []);
+      });
+
+      it("takes its runner from a repository variable, except a job that runs before any is set", () => {
+        const found = runners(workflow(name));
+        assert.notEqual(found.length, 0);
+        const allowed = name === "bootstrap" ? [LINUX, MAC, "ubuntu-latest"] : [LINUX, MAC];
+        assert.deepEqual(found.filter((runner) => !allowed.includes(runner)), []);
+      });
+
+      it("runs no package manager by name, only install.sh and kitchen.json's", () => {
+        assert.deepEqual(
+          workflow(name)
+            .split("\n")
+            .filter((line) => /\b(pnpm|yarn|bun)\s+(install|add|exec|run|dlx|i)\b|\bnpm (ci|run)\b/.test(line)),
+          [],
+        );
+      });
+
+      it("runs only kitchen scripts that exist", () => {
+        const missing = [...workflow(name).matchAll(/\.claude\/kitchen\/scripts\/([\w.-]+)/g)]
+          .map((match) => `.claude/kitchen/scripts/${match[1]}`)
+          .filter((path) => !exists(path));
+        assert.deepEqual([...new Set(missing)], []);
+      });
+
+      it("starts no database of its own", () => {
+        assert.deepEqual([/docker run/, /fixture-dictionary/].filter((pattern) => pattern.test(workflow(name))), []);
+      });
     });
   }
 });
 
-describe("a shared workflow takes its runner from a repository variable", () => {
-  for (const { file, text } of SHARED) {
-    it(`${file} hard-codes no runner label`, () => {
-      const found = runners(text);
-      assert.notEqual(found.length, 0);
-      assert.deepEqual(
-        found.filter((runner) => runner !== LINUX && runner !== MAC),
-        [],
-      );
-    });
-  }
-
-  for (const file of ["ci.yml", "shoot-design.yml"]) {
-    it(`every job in ${file} hard-codes no runner label`, () => {
-      const found = runners(workflow(file));
-      assert.notEqual(found.length, 0);
-      assert.deepEqual(
-        found.filter((runner) => runner !== LINUX),
-        [],
-      );
-    });
-  }
-
-  for (const file of [...WORKFLOWS, "ci.yml", "shoot-design.yml"]) {
-    it(`${file} uses no action from a denylisted vendor`, () => {
-      const used = workflow(file)
-        .split("\n")
-        .filter((line) => /^\s*(- )?uses:/.test(line))
-        .join("\n")
-        .toLowerCase();
-      assert.deepEqual(
-        DENYLIST.filter((literal) => used.includes(literal)),
-        [],
-      );
-    });
-  }
-
-  it("verify-expo.yml puts only its macOS job on the macOS runner", () => {
-    const text = workflow("verify-expo.yml");
+describe("verify-expo", () => {
+  it("puts only its macOS job on the macOS runner", () => {
+    const text = workflow("verify-expo");
     assert.deepEqual(runners(jobBlock(text, "flows")), [LINUX]);
     assert.deepEqual(runners(jobBlock(text, "ios")), [MAC]);
   });
+
+  it("starts the API through the stack adapter, before the build inlines its URL", () => {
+    const text = workflow("verify-expo");
+    assert.ok(text.indexOf("adapter.mjs stack up") < text.indexOf("eas build"));
+    assert.match(step(text, "Start the API"), /\$KITCHEN_API_URL_ENV=/);
+  });
 });
 
-describe("the dictionary stays out of the shared workflows", () => {
-  for (const file of WORKFLOWS) {
-    it(`${file} starts no database of its own`, () => {
-      const text = workflow(file);
-      assert.deepEqual(
-        [/fixture-dictionary/, /docker run/].filter((pattern) => pattern.test(text)),
-        [],
-      );
+describe("the app's environment", () => {
+  for (const name of ["shoot-expo-web", "verify-expo", "pr-preview"]) {
+    it(`${name} writes it from kitchen.json's ci.secrets and ci.vars, through ci-env.mjs`, () => {
+      const text = step(workflow(name), "Write the app's environment");
+      assert.match(text, /KITCHEN_SECRETS_JSON: \$\{\{ toJSON\(secrets\) \}\}/);
+      assert.match(text, /ci-env\.mjs --eas/);
     });
   }
 });
 
-describe("shoot-expo-web.yml's push step", () => {
-  const push = () => {
-    const text = workflow("shoot-expo-web.yml");
-    const start = text.indexOf("- name: Push the shots to evidence/<pr>");
-    assert.notEqual(start, -1, "no push step");
-    const next = text.indexOf("\n      - name:", start + 1);
-    return next === -1 ? text.slice(start) : text.slice(start, next);
-  };
+describe("shoot-expo-web's push step", () => {
+  const push = () => step(workflow("shoot-expo-web"), "Push the shots to evidence/<pr>");
 
   it("refuses a run that took no screenshot at all", () => {
     assert.match(push(), /\$\{#shots\[@\]\}" -eq 0/);
@@ -116,21 +115,30 @@ describe("shoot-expo-web.yml's push step", () => {
   it("hosts a run whose every shot is a failure shot, since that is a Before for a feature not built yet", () => {
     assert.doesNotMatch(push(), /-failure\.png/);
   });
-});
-
-describe("shoot-expo-web.yml's stack steps", () => {
-  const text = () => workflow("shoot-expo-web.yml");
-
-  it("starts and stops the servers with the core dev-server.sh", () => {
-    assert.match(text(), /\.claude\/kitchen\/scripts\/dev-server\.sh start/);
-    assert.match(text(), /\.claude\/kitchen\/scripts\/dev-server\.sh stop/);
-  });
-
-  it("signs in through the auth adapter, as the account it seeded", () => {
-    assert.match(text(), /AUTH_DEV_LOGIN_EMAIL="\$email" node \.claude\/kitchen\/scripts\/adapter\.mjs auth sign-in/);
-  });
 
   it("pushes the shots through the evidence host's push-shots.sh", () => {
-    assert.match(text(), /\.claude\/kitchen\/scripts\/push-shots\.sh/);
+    assert.match(push(), /\.claude\/kitchen\/scripts\/push-shots\.sh/);
+  });
+});
+
+describe("shoot-expo-web's drive", () => {
+  const drive = () => step(workflow("shoot-expo-web"), "Drive the flows");
+
+  it("shoots both halves with the shoot-pair.sh /evidence uses", () => {
+    assert.match(drive(), /\.claude\/kitchen\/scripts\/shoot-pair\.sh/);
+  });
+
+  it("stands a branch-only run up through session-up.sh, so the adapters seed and sign in", () => {
+    assert.match(drive(), /\.claude\/kitchen\/scripts\/session-up\.sh up/);
+  });
+});
+
+describe("bootstrap", () => {
+  it("creates the labels doctor.mjs lists from kitchen.json", () => {
+    assert.match(workflow("bootstrap"), /doctor\.mjs --labels/);
+  });
+
+  it("is dispatched by hand and by nothing else", () => {
+    assert.match(workflow("bootstrap"), /^on:\n {2}workflow_dispatch:\n/m);
   });
 });
