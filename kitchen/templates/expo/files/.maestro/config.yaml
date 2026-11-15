@@ -1,0 +1,4 @@
+# Maestro flows for the kitchen's driver. On web the kitchen runs them through Playwright;
+# on a device or simulator, plain `maestro test .maestro/flows` runs the same files.
+flows:
+  - flows/*

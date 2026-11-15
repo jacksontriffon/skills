@@ -1,0 +1,7 @@
+# Smoke flow: the app starts and its home route renders. Doctor shoots this at 390x844.
+appId: {{APP_ID}}
+name: home
+---
+- launchApp
+- waitForAnimationToEnd
+- takeScreenshot: home

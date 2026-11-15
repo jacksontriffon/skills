@@ -1,0 +1,5 @@
+{
+  "drive": "node .claude/kitchen/scripts/drive.mjs",
+  "test:scripts": "node --test .claude/kitchen/scripts",
+  "kitchen:doctor": "node .claude/kitchen/scripts/doctor.mjs"
+}
