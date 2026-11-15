@@ -651,7 +651,9 @@ const head = git('symbolic-ref', '--short', 'refs/remotes/origin/HEAD').replace(
 const baseBranch = head || git('symbolic-ref', '--short', 'HEAD') || 'main';
 
 const values = {
-  REPO: repoMatch ? repoMatch[1] : null,
+  // The schema requires repo as owner/name, so an undetected one is a placeholder that still
+  // validates; doctor and /kitchen-setup name it.
+  REPO: repoMatch ? repoMatch[1] : 'TODO-owner/TODO-repo',
   BASE_BRANCH: baseBranch,
   PACKAGE_MANAGER: pm,
   WORKSPACE_TOOL: workspaceTool || null,

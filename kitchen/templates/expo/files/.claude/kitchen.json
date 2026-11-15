@@ -13,12 +13,5 @@
     "nativeDirs": "{{NATIVE_DIRS}}"
   },
   "flows": ".maestro",
-  "design": "docs/design",
-  "adapters": {
-    "stack": { "use": "supabase-local" },
-    "db": { "use": "supabase-migrations" },
-    "auth": { "use": "supabase-auth" },
-    "errors": { "use": "none" },
-    "evidenceHost": { "use": "git-branch" }
-  }
+  "design": "docs/design"
 }

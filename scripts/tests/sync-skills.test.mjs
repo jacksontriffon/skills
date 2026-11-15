@@ -15,7 +15,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '../..');
@@ -414,9 +414,18 @@ function assertStarters(root) {
   assert.equal(kitchen.flows, '.maestro');
   assert.equal(kitchen.design, 'docs/design');
   assert.ok(kitchen.humans.default);
-  assert.deepEqual(Object.fromEntries(Object.entries(kitchen.adapters).map(([k, v]) => [k, v.use])), {
-    stack: 'supabase-local', db: 'supabase-migrations', auth: 'supabase-auth', errors: 'none', evidenceHost: 'git-branch',
-  });
+  assert.match(kitchen.repo, /^[\w.-]+\/[\w.-]+$/, 'repo is always owner/name, even a placeholder');
+  assert.ok(!('adapters' in kitchen), 'the default adapters come from the schema, not the skeleton');
+
+  // When the synced kitchen is real (KITCHEN_SOURCE_TREE), its own validator must accept the file.
+  const kitchenMjs = path.join(root, '.claude/kitchen/scripts/kitchen.mjs');
+  if (fs.readFileSync(kitchenMjs, 'utf8').includes('export function validate')) {
+    const v = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      const k = await import(${JSON.stringify(pathToFileURL(kitchenMjs).href)});
+      k.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(path.join(root, '.claude/kitchen.json'))}, 'utf8')));
+    `], { encoding: 'utf8' });
+    assert.equal(v.status, 0, `the synced schema rejects init's kitchen.json:\n${v.stderr}`);
+  }
   assert.equal(fs.readFileSync(path.join(root, '.maestro/config.yaml'), 'utf8'), 'flows:\n  - "flows/*.yaml"\n');
 
   const claude = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
@@ -480,6 +489,7 @@ test('--init expo into a pnpm monorepo finds the app in its workspace', (t) => {
     nativeDirs: ['apps/mobile/ios', 'apps/mobile/android'],
   });
   assert.ok(!exists(root, 'apps/mobile/.claude'), 'starters go at the repo root');
+  assert.equal(kitchen.repo, 'TODO-owner/TODO-repo', 'no remote: a placeholder that still validates');
   assert.equal(json(path.join(root, 'package.json')).scripts.build, 'turbo build');
 });
 
