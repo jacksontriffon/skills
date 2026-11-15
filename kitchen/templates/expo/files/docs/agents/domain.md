@@ -1,9 +1,9 @@
-# Domain
+# Domain docs
 
-How this repo's domain knowledge is laid out, for skills that read it (`/domain-modeling`, `/to-spec`, `/grill-with-docs`).
+This repo is single-context: one `CONTEXT.md` glossary at the root, and decisions in `docs/adr/NNNN-<the-decision-as-a-sentence>.md`.
 
-- **Layout:** single context. The glossary and the rules of the domain live in `CONTEXT.md` at the repo root; create it when the first term needs pinning down.
-- **Decisions:** one file per decision under `docs/adr/`, numbered, the filename stating the decision. ADRs load only when a link is followed; do not summarise them elsewhere.
-- **The app:** the Expo app lives at `{{APP_DIR}}`, with its routes under `{{ROUTES_DIR}}`.
-
-If the repo grows more than one bounded context, list each here with its own `CONTEXT.md`.
+- Read `CONTEXT.md`, and the ADRs whose title touches your area, before exploring the code.
+- If a term is missing from the glossary, proceed without asking. `/domain-modeling` adds it.
+- The next ADR takes the next free four-digit number. If two branches take the same number, the branch that merges second renumbers.
+- Use the glossary's terms, not synonyms.
+- If your output contradicts an ADR, say so: "_Contradicts ADR-NNNN (…) — but worth reopening because…_".

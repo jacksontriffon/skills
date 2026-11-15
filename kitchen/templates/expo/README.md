@@ -10,6 +10,6 @@
 | `CLAUDE.section.md` | `CLAUDE.md` | Appended once; its first line is the marker that says it is there |
 | `package-scripts.json` | root `package.json` `scripts` | A script is added when its name is free; a name already taken is kept and reported |
 
-Placeholders init fills: `{{REPO}}`, `{{BASE_BRANCH}}`, `{{PACKAGE_MANAGER}}`, `{{WORKSPACE_TOOL}}`, `{{APP_DIR}}`, `{{ROUTES_DIR}}`, `{{APP_ID}}`, `{{SCHEME}}`, `{{NATIVE_DIRS}}`. In prose and YAML an undetected value is written as `TODO-<key>`, so it reads as something to fill in.
+Placeholders init fills: `{{REPO}}`, `{{BASE_BRANCH}}`, `{{PACKAGE_MANAGER}}`, `{{WORKSPACE_TOOL}}`, `{{APP_DIR}}`, `{{ROUTES_DIR}}`, `{{APP_ID}}`, `{{SCHEME}}`, `{{NATIVE_DIRS}}`, `{{HUMAN}}` (always `TODO-github-login`). In prose and YAML an undetected value is written as `TODO-<key>`, so it reads as something to fill in.
 
-`files/.claude/kitchen-denylist.txt` is zero bytes on purpose. `grep -f` on a file holding one blank line matches every line; an empty file matches none.
+`files/kitchen-denylist.txt` (repo root, where `kitchen.mjs` resolves it) is zero bytes on purpose. `grep -f` on a file holding one blank line matches every line; an empty file matches none.

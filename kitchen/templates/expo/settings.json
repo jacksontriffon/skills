@@ -1,16 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node .claude/kitchen/scripts/*)",
-      "Bash(bash .claude/kitchen/scripts/*)",
-      "Bash(.claude/kitchen/scripts/*)",
-      "Bash(.claude/kitchen/adapters/*)",
-      "Bash(.claude/scripts/sync-skills.sh*)",
-      "Bash({{PACKAGE_MANAGER}} kitchen:doctor)",
-      "Bash({{PACKAGE_MANAGER}} drive*)",
-      "Bash({{PACKAGE_MANAGER}} test:scripts)",
-      "Bash(git *)",
-      "Bash(gh *)"
+      "Edit(.claude/tmp/**)",
+      "Write(.claude/tmp/**)",
+      "Bash(*)",
+      "mcp__github"
     ]
   },
   "hooks": {
@@ -19,7 +13,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/kitchen/scripts/kitchen.mjs brief"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/kitchen/scripts/kitchen.mjs\" brief"
           }
         ]
       }

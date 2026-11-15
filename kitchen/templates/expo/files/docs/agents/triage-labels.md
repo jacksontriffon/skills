@@ -1,14 +1,33 @@
 # Triage labels
 
-What each triage state means, and the label that marks it. The label strings themselves are configured under `labels` in `.claude/kitchen.json`; this page says what they mean.
+Each role maps to a label string. The strings live under `labels` in `.claude/kitchen.json`; the defaults are shown here. Use the label string from these tables.
 
-| State | Meaning | Who moves it on |
-| --- | --- | --- |
-| needs triage | New, not yet read | Whoever triages |
-| needs info | Cannot be worked until the reporter answers | The reporter |
-| ready for agent | Specified well enough for an agent to pick up unattended | `/find-work` |
-| ready for human | Needs a person: a decision, an account, a credential | A human |
-| blocked | Started, then stuck on something outside the ticket | `/unblock` |
-| won't fix | Closed on purpose | — |
+## State roles
 
-A ticket carries exactly one state at a time.
+| Role | Label |
+| --- | --- |
+| needs-triage | `needs-triage` |
+| needs-info | `needs-info` |
+| ready-for-human | `ready-for-human` |
+| wontfix | `wontfix` |
+
+## Category roles
+
+| Role | Label |
+| --- | --- |
+| bug | `bug` |
+| enhancement | `enhancement` |
+
+## What keeps an issue out of the build loop
+
+There is no ready-for-agent role. The loop takes any open issue that `/pick-up-ticket` step 1 does not drop.
+
+## Labels that are not triage roles
+
+| Label | Set by |
+| --- | --- |
+| `urgent` | A person |
+| `blocked` | `/drive-pr-green` |
+| `needs-human` | `/unblock`, `/pick-up-ticket` |
+
+PR labels are in [`.claude/kitchen/docs/pr-format.md`](../../.claude/kitchen/docs/pr-format.md#labels).

@@ -660,6 +660,8 @@ const values = {
   APP_ID: appId,
   SCHEME: scheme,
   NATIVE_DIRS: [app('ios'), app('android')],
+  // A GitHub login init cannot know; /kitchen-setup asks for the humans per area.
+  HUMAN: 'TODO-github-login',
 };
 // In prose and YAML a missing value still has to read as something to fill in.
 const textValue = (k) => {

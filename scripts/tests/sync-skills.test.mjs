@@ -169,9 +169,9 @@ function contractDest(rel) {
 
 const STARTERS = [
   '.claude/kitchen.json',
-  '.claude/kitchen-denylist.txt',
+  'kitchen-denylist.txt',
   '.claude/settings.json',
-  'BLOCKERS.md',
+  '.claude/BLOCKERS.md',
   'docs/agents/issue-tracker.md',
   'docs/agents/triage-labels.md',
   'docs/agents/domain.md',
@@ -398,16 +398,26 @@ const PNPM_MONOREPO = {
 
 function assertStarters(root) {
   for (const f of STARTERS) assert.ok(exists(root, f), `${f} was not written`);
-  assert.equal(fs.statSync(path.join(root, '.claude/kitchen-denylist.txt')).size, 0, 'the empty denylist is zero bytes');
+  assert.equal(fs.statSync(path.join(root, 'kitchen-denylist.txt')).size, 0, 'the empty denylist is zero bytes');
 
   const settings = json(path.join(root, '.claude/settings.json'));
   const commands = settings.hooks.SessionStart.flatMap((g) => g.hooks.map((h) => h.command));
-  assert.ok(commands.includes('node .claude/kitchen/scripts/kitchen.mjs brief'));
-  assert.ok(settings.permissions.allow.length > 0);
+  assert.ok(commands.includes('node "$CLAUDE_PROJECT_DIR/.claude/kitchen/scripts/kitchen.mjs" brief'));
+  assert.deepEqual(settings.permissions.allow, ['Edit(.claude/tmp/**)', 'Write(.claude/tmp/**)', 'Bash(*)', 'mcp__github']);
 
   const scripts = json(path.join(root, 'package.json')).scripts;
   assert.equal(scripts['kitchen:doctor'], 'node .claude/kitchen/scripts/doctor.mjs');
-  assert.ok(scripts.drive && scripts['test:scripts']);
+  assert.equal(scripts.drive, 'node .claude/kitchen/scripts/drive.mjs');
+  assert.equal(scripts['test:scripts'], 'node --test ".claude/scripts/*.test.mjs" ".claude/kitchen/scripts/*.test.mjs"');
+
+  const kitchen = json(path.join(root, '.claude/kitchen.json'));
+  assert.equal(kitchen.flows, '.maestro');
+  assert.equal(kitchen.design, 'docs/design');
+  assert.ok(kitchen.humans.default);
+  assert.deepEqual(Object.fromEntries(Object.entries(kitchen.adapters).map(([k, v]) => [k, v.use])), {
+    stack: 'supabase-local', db: 'supabase-migrations', auth: 'supabase-auth', errors: 'none', evidenceHost: 'git-branch',
+  });
+  assert.equal(fs.readFileSync(path.join(root, '.maestro/config.yaml'), 'utf8'), 'flows:\n  - "flows/*.yaml"\n');
 
   const claude = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
   assert.equal(claude.match(/<!-- kitchen:start -->/g).length, 1);
@@ -438,7 +448,7 @@ test('--init expo into a create-expo-app repo writes the starter files', (t) => 
   const kitchen = json(path.join(root, '.claude/kitchen.json'));
   assert.equal(kitchen.repo, 'example-org/my-app');
   assert.equal(kitchen.packageManager, 'npm');
-  assert.ok(!('workspaceTool' in kitchen), 'a single app has no workspace tool');
+  assert.match(r.out, /Workspace tool:\s+none/);
   assert.deepEqual(kitchen.expo, {
     appDir: '.', routesDir: 'app', appId: 'com.example.myapp', scheme: 'myapp', nativeDirs: ['ios', 'android'],
   });
@@ -461,7 +471,7 @@ test('--init expo into a pnpm monorepo finds the app in its workspace', (t) => {
 
   const kitchen = json(path.join(root, '.claude/kitchen.json'));
   assert.equal(kitchen.packageManager, 'pnpm');
-  assert.equal(kitchen.workspaceTool, 'turbo');
+  assert.match(r.out, /Workspace tool:\s+turbo/);
   assert.deepEqual(kitchen.expo, {
     appDir: 'apps/mobile',
     routesDir: 'apps/mobile/src/app',
@@ -492,7 +502,7 @@ test('a second --init overwrites nothing', (t) => {
   assert.deepEqual(settings.permissions.deny, ['Bash(rm -rf *)']);
 
   // The project makes the starters its own...
-  write(path.join(root, 'BLOCKERS.md'), 'ours now\n');
+  write(path.join(root, '.claude/BLOCKERS.md'), 'ours now\n');
   write(path.join(root, 'docs/agents/domain.md'), 'ours now\n');
   const kitchen = json(path.join(root, '.claude/kitchen.json'));
   kitchen.repo = 'someone/else';
@@ -542,7 +552,7 @@ test('--init asks rather than guesses when there is no Expo app or more than one
   const kitchen = json(path.join(two, '.claude/kitchen.json'));
   assert.equal(kitchen.expo.appDir, 'apps/two');
   assert.equal(kitchen.packageManager, 'yarn');
-  assert.equal(kitchen.workspaceTool, 'yarn-workspaces');
+  assert.match(r3.out, /Workspace tool:\s+yarn-workspaces/);
 });
 
 test('--init with no lockfile records pnpm', (t) => {
@@ -554,5 +564,5 @@ test('--init with no lockfile records pnpm', (t) => {
   const r = run(box, root, ['--init', 'expo']);
   assert.equal(r.status, 0, r.out);
   assert.equal(json(path.join(root, '.claude/kitchen.json')).packageManager, 'pnpm');
-  assert.ok(json(path.join(root, '.claude/settings.json')).permissions.allow.includes('Bash(pnpm kitchen:doctor)'));
+  assert.match(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), /`pnpm kitchen:doctor`/);
 });

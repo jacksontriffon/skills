@@ -148,7 +148,7 @@ It assumes no layout:
    more than one, it asks rather than guesses, and with no terminal to ask on it stops having
    written nothing. Name the app up front with `--app <dir>`.
 2. **Detects the package manager** from the lockfile — pnpm, yarn, bun or npm, and pnpm when there is
-   none — and the workspace tool (turbo, nx, lerna, or the package manager's own workspaces).
+   none — and reports the workspace tool (turbo, nx, lerna, or the package manager's own workspaces).
 3. **Writes `.claude/skills.sources`** naming the portable skills and the kitchen, unless one exists.
 4. **Vendors everything**, exactly as a sync does.
 5. **Writes the starter files once.** A file that already exists is kept, and a re-run writes
@@ -156,11 +156,11 @@ It assumes no layout:
 
    | File | Starts as |
    | --- | --- |
-   | `.claude/kitchen.json` | The detected `expo.*` paths, package manager, workspace tool, app id and scheme. A value init cannot find is left out for `/kitchen-setup` to fill |
-   | `.claude/settings.json` | Permissions and the SessionStart hook running `node .claude/kitchen/scripts/kitchen.mjs brief`. An existing file only gains the rules and hook it lacks |
+   | `.claude/kitchen.json` | The detected repo, package manager and `expo.*` paths, app id and scheme, plus `flows`, `design`, `humans.default` and the default adapter per slot. A value init cannot find is left out for `/kitchen-setup` to fill |
+   | `.claude/settings.json` | Permissions and the SessionStart hook running `kitchen.mjs brief`. An existing file only gains the rules and hook it lacks |
    | `CLAUDE.md` | The kitchen's few lines, appended once between `kitchen:start`/`kitchen:end` markers |
    | `package.json` | The `drive`, `test:scripts` and `kitchen:doctor` scripts, each added only when its name is free |
-   | `BLOCKERS.md`, `docs/agents/{issue-tracker,triage-labels,domain}.md`, `.maestro/config.yaml`, `.maestro/flows/home.yaml`, `docs/design/{README,DEVIATIONS}.md`, `.claude/kitchen-denylist.txt` | Starters from [`kitchen/templates/expo/`](kitchen/templates/expo/) |
+   | `.claude/BLOCKERS.md`, `docs/agents/{issue-tracker,triage-labels,domain}.md`, `.maestro/config.yaml`, `.maestro/flows/home.yaml`, `docs/design/{README,DEVIATIONS}.md`, `kitchen-denylist.txt` | Starters from [`kitchen/templates/expo/`](kitchen/templates/expo/) |
 
 Then open a Claude session, run `/kitchen-setup`, and run `<package manager> kitchen:doctor` until
 it is green.

@@ -1,14 +1,24 @@
 {
   "$schema": "./kitchen/kitchen.schema.json",
   "repo": "{{REPO}}",
-  "baseBranch": "{{BASE_BRANCH}}",
   "packageManager": "{{PACKAGE_MANAGER}}",
-  "workspaceTool": "{{WORKSPACE_TOOL}}",
+  "humans": {
+    "default": "{{HUMAN}}"
+  },
   "expo": {
     "appDir": "{{APP_DIR}}",
     "routesDir": "{{ROUTES_DIR}}",
     "appId": "{{APP_ID}}",
     "scheme": "{{SCHEME}}",
     "nativeDirs": "{{NATIVE_DIRS}}"
+  },
+  "flows": ".maestro",
+  "design": "docs/design",
+  "adapters": {
+    "stack": { "use": "supabase-local" },
+    "db": { "use": "supabase-migrations" },
+    "auth": { "use": "supabase-auth" },
+    "errors": { "use": "none" },
+    "evidenceHost": { "use": "git-branch" }
   }
 }
