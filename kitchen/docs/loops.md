@@ -3,7 +3,7 @@
 Four loops run a project on the kitchen. Each one's mechanics live in its skill. What's here is
 how they fit together — read down `Eats` and `Leaves` and the cycle closes. What a project adds
 to it — its Routines' names, its risk floors, where its setup is still open — is in its own
-[`docs/agents/loops.md`](../../../docs/agents/loops.md).
+`docs/agents/loops.md`, where it keeps one.
 
 `kitchen.<key>` is a value from [`.claude/kitchen.json`](../../kitchen.json). A label is a
 `kitchen.labels` key, and the name in the tables is its default.
@@ -26,7 +26,7 @@ the tick.
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Build   | the Routine `kitchen.routines.work` → [`/find-work`](../../skills/find-work/SKILL.md), third in line → [`/pick-up-ticket`](../../skills/pick-up-ticket/SKILL.md)                | open issues no label excludes | PRs driven by [`/drive-pr-green`](../../skills/drive-pr-green/SKILL.md): `auto-merge`, `ready-for-human`, or `blocked`                              |
 | Unblock | the Routine `kitchen.routines.work` → `/find-work`, first in line → [`/unblock`](../../skills/unblock/SKILL.md)                                                                | `blocked` PRs                 | PRs resumed through `/drive-pr-green`, or their `🧱 <key>` issue labelled `needs-human`, tagging [`kitchen.json`](../../kitchen.json)'s `humans` owner |
-| Test    | a Routine of the project's own → [`/test-pr`](../../skills/test-pr/SKILL.md)                                                                                                   | open PRs                      | a draft PR per lane, with device-test steps; a finding on one feeds [`/retest-pr`](../../skills/retest-pr/SKILL.md)                                 |
+| Test    | a Routine of the project's own → `/test-pr`, where the project carries it until the kitchen ships it in v2                                                                    | open PRs                      | a draft PR per lane, with device-test steps; a finding on one feeds `/retest-pr`                                                                    |
 | Fix     | the Routine `kitchen.routines.errors` → [`/fix-top-error`](../../skills/fix-top-error/SKILL.md)                                                                                | error-tracking issues         | PRs driven by `/drive-pr-green`, same as Build                                                                                                      |
 
 ```
@@ -63,7 +63,7 @@ reads their output before anything is built on it.
 The code loops above end at a PR a human merges. The outbound and content loops — scripts,
 emails, posts, video scripts, thumbnails — end at a control a human merged, and run on a
 different cycle: research, draft, publish, measure, then fix or promote. A project that runs
-them keeps their model in [`content-loops.md`](../../../docs/agents/content-loops.md).
+them keeps their model in its own `docs/agents/content-loops.md`.
 
 ## The agents
 
@@ -160,6 +160,6 @@ driven again in full. A conflict no agent can resolve is a `merge:` block.
 **A device-test failure goes in as a comment on the lane PR**, under the steps-table row that
 failed. That row names the PR the fix belongs on — lane branches are thrown away, so a fix
 that lands on one dies with it.
-[`/retest-pr`](../../skills/retest-pr/SKILL.md) is what reads that comment: it maps
+`/retest-pr`, in a project that carries the Test loop, is what reads that comment: it maps
 the row to the PR, fixes it there, and re-enters `/test-pr` to rebuild the lane, rather than
 leaving the finding for someone to hand-carry across.

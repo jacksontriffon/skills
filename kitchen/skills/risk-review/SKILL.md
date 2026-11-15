@@ -57,8 +57,8 @@ and the floor.
 | a new screen or component no existing route reaches yet, or one behind a flag that is off   | low    |
 | a bug fix inside one module whose test went red then green                                  | low    |
 | a change to what an existing screen does, not just how it looks                             | medium |
-| a tRPC procedure's input or output changes, or a query it runs                              | medium |
-| caching, notifications, analytics events, onboarding, the quiz or study-list logic          | medium |
+| an API endpoint's input or output changes, or a query it runs                               | medium |
+| caching, notifications, analytics events, onboarding, or the app's core loop logic          | medium |
 | a pattern other code will copy: a new module boundary, a shared hook, a new dependency     | medium |
 | reads or writes another user's data, or deletes anything                                     | high   |
 | sends something to a user outside the app — email, push — or charges them                   | high   |

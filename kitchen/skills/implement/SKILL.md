@@ -63,8 +63,8 @@ A diff touching the schema carries its migration, and the shared database carrie
 before step 5 photographs anything against it. Generating, applying and checking a migration
 is the `db` adapter's job (`kitchen.adapters.db`): `node .claude/kitchen/scripts/adapter.mjs db migrate --name <what_it_does>`
 writes it and refuses anything but an **expand** — a contract is its own ticket — and `db pending` and
-`db apply <tag>` print the SQL that checks and applies it. This repo's own rules are in
-[`migrations.md`](../../../docs/agents/migrations.md).
+`db apply <tag>` print the SQL that checks and applies it. The rules are in the db adapter's
+[README](../../kitchen/adapters/db/README.md#apply).
 
 A diff touching no schema skips this.
 
@@ -91,7 +91,7 @@ Done when the shot, the `blocked`, or the line naming what you checked is posted
 ## 6. Gate the commit
 
 ```bash
-pnpm lint && pnpm format && pnpm typecheck && pnpm test
+pm=<kitchen.packageManager>; $pm run lint && $pm run format && $pm run typecheck && $pm run test
 ```
 
 Green here, not on trust. Then commit to the current branch, per

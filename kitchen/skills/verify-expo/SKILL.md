@@ -60,7 +60,7 @@ An unattended run stops at the launch screen. Everything worth looking at sits b
 a tap, so the driving *is* the work.
 
 The taps are checked in: the `README.md` in `kitchen.flows` maps each
-route to the flow that reaches it, and `pnpm drive <kitchen.flows>/flows/<name>.yaml` runs one.
+route to the flow that reaches it, and `node .claude/kitchen/scripts/drive.mjs <kitchen.flows>/flows/<name>.yaml` runs one.
 A screen no flow reaches yet earns a flow, which costs less than driving it by hand
 twice.
 

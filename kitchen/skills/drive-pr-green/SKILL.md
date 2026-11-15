@@ -157,7 +157,7 @@ In this order, before any review:
 
 1. `mergeable_state` is `dirty` or `behind` → merge `origin/<kitchen.baseBranch>` in → resolve per
    [`/resolving-merge-conflicts`](../resolving-merge-conflicts/SKILL.md). Migration clash →
-   [`migrations.md`](../../../docs/agents/migrations.md#two-branches-one-number). Never
+   the db adapter's [README](../../kitchen/adapters/db/README.md#two-branches-one-number). Never
    rebase or force-push a branch you did not open. Write down every conflicted hunk: its
    file, and `kept base`, `kept PR`, `kept both` or `rewrote`. A `rewrote` hunk moves the
    change, so on a handed-over PR every phase step 3 marked `met` becomes owed. Take
@@ -168,7 +168,7 @@ In this order, before any review:
 3. Run the gates:
 
    ```bash
-   pnpm lint && pnpm format && pnpm typecheck && pnpm test
+   pm=<kitchen.packageManager>; $pm run lint && $pm run format && $pm run typecheck && $pm run test
    ```
 
 4. All green → push once → relabel per
@@ -323,9 +323,9 @@ risk reviewed on this head, nothing blocked → hand over:**
    ```markdown
    🔀 **Merged `<kitchen.baseBranch>`** · a1b2c3d
 
-   | File                               | Hunks | Kept |
-   | ---------------------------------- | ----- | ---- |
-   | `packages/api/src/router/video.ts` | 2     | both |
+   | File                        | Hunks | Kept |
+   | --------------------------- | ----- | ---- |
+   | `src/features/cart/cart.ts` | 2     | both |
    ```
 
 2. Relabel by step 9's tier on the new head, as the hand-over does: `kitchen.labels.autoMerge`

@@ -25,6 +25,38 @@ every later command runs. [`dev-server.sh`](../../scripts/dev-server.sh) holds `
 An agent container cannot reach a hosted database, so `pending` and `apply` print SQL instead of
 running it: the agent runs it through the database connector it has.
 
+## Apply
+
+Every branch shares one database, so a branch's migration reaches it before the branch merges,
+and the expand rule above is what keeps that safe.
+
+| Step | Do                                                                                                |
+| ---- | ------------------------------------------------------------------------------------------------- |
+| 1    | `node .claude/kitchen/scripts/adapter.mjs db pending` → run its output through the database connector |
+| 2    | for each tag it returns, oldest first: `… db apply <tag>` → run that through the connector          |
+| 3    | step 1 again. It returns no rows                                                                   |
+
+`apply` exits 1 with nothing to run when the file is a contract, whoever edited it. A contract's
+own ticket, applied from `kitchen.baseBranch`, passes `--allow-contract`. Each adapter's section
+below names the ledger its `apply` writes, so a workstation migrating afterwards agrees with it.
+
+## Two branches, one number
+
+Two open PRs each adding the same migration number is the ordinary case. The second to merge
+the base branch in renumbers: check out the base branch's migrations directory whole, then
+`node .claude/kitchen/scripts/adapter.mjs db migrate --name <the same name>`. `migrate` diffs
+against the base branch's last snapshot, so it writes only this branch's change.
+
+If this branch's migration was already applied, the same SQL gives the same hash and `pending`
+reports nothing. If the SQL changed, `pending` reports the new tag: read the tables it touches
+first, then `apply <tag> --record-only` when they already have that shape, else `apply <tag>`.
+
+## Which paths are the schema
+
+`adapters.db.paths` in `kitchen.json` lists the globs that hold the schema and its migrations.
+`pr-labels.mjs` labels a PR touching one `kitchen.labels.dbChange`. A project lists the same
+globs in `risk.high` when a change there should wait for a person.
+
 ## postgres-drizzle
 
 A Postgres cluster in the container, and a Drizzle schema pushed to it.

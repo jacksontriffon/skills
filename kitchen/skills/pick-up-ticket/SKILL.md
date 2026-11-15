@@ -90,7 +90,7 @@ node .claude/kitchen/scripts/adapter.mjs db pending
 That prints SQL: the `db` adapter's `pending` (`kitchen.adapters.db`).
 
 Run it through the database connector's `execute_sql`, then `node .claude/kitchen/scripts/adapter.mjs db apply <tag>` for each tag it returns,
-oldest first, per [`migrations.md`](../../../docs/agents/migrations.md#apply).
+oldest first, per the db adapter's [README](../../kitchen/adapters/db/README.md#apply).
 
 Done when `pending` returns no rows through `execute_sql`.
 

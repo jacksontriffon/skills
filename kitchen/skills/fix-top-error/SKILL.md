@@ -17,7 +17,8 @@ GitHub is `kitchen.repo`, base `kitchen.baseBranch`.
 
 The tracker is reached only through the `errors` adapter that `kitchen.adapters.errors.use`
 names. What the project's events carry, and which issues its sweep never takes, are in
-[`error-tracking.md`](../../../docs/observability/error-tracking.md).
+the **error doc**, the file `kitchen.adapters.errors.doc` names. A project without one skips
+nothing but what the adapter's `guide` says to.
 
 ## 1. Pick
 
@@ -37,7 +38,7 @@ the wrong project, and a search there reads as a quiet week. Then follow the gui
 Rank on **users affected first, occurrences second** — one crash hitting 400 people beats a
 loop firing 40,000 events at one person. Then apply, in order:
 
-1. Drop what [**What the sweep skips**](../../../docs/observability/error-tracking.md#what-the-sweep-skips)
+1. Drop what **What the sweep skips** in the error doc
    lists: the pipeline's own smoke test, and the buckets that are not a fault in this repo.
 2. Drop anything already picked up, per **Taken** below.
 3. Prefer `fatal` over `error` over `warning` at comparable reach — `fatal` means the app hit
@@ -85,7 +86,7 @@ something to do.
 
 | What you found                                         | Say                                                                                                                                                                             |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No exception rows at all, in the list or the events    | Nothing is arriving. That is a pipeline failure or a quiet week and you cannot tell which — say so, and name the smoke test's command in [`error-tracking.md`](../../../docs/observability/error-tracking.md#the-smoke-test) as what settles it |
+| No exception rows at all, in the list or the events    | Nothing is arriving. That is a pipeline failure or a quiet week and you cannot tell which — say so, and name the smoke test's command in the error doc as what settles it |
 | Only the smoke test's fingerprint                      | Pipeline alive, no faults reported. This is the good outcome                                                                                                                    |
 | Rows, none clears **the bar**                          | Name the top one, its users and level, and which test it failed                                                                                                                 |
 | Everything clearing the bar is **Taken**               | Name each and what holds it — the issue, the PR, or the claim                                                                                                                   |
@@ -138,7 +139,7 @@ runs again.
 Follow the guide's **Read one issue**.
 
 The events carry what the repo attaches at capture time, which
-[**Reading the events**](../../../docs/observability/error-tracking.md#reading-the-events)
+**Reading the events** in the error doc
 explains: read it before opening a file. Its operation and screen properties together name the
 file, and its source property says which capture point fired and so which end of the app to
 start from.

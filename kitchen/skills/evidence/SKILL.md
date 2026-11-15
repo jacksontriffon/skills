@@ -16,9 +16,9 @@ the Design and After shots taken here, taking none of its own
 
 One session does all of it — stands the app up, shoots, hosts the shots and writes the table
 into the PR body. Every shot lives on `evidence/<pr>` of `kitchen.repo`, and no other host holds
-one ([ADR 0023](../../../docs/adr/0023-proof-is-hosted-on-this-repo-or-it-is-code.md)). No runner
-sits anywhere in the path: the dictionary a session cannot reach is replaced by a local one it
-starts itself, and step 3 says what that holds.
+one ([`evidence-hosting.md`](../../kitchen/docs/evidence-hosting.md)). No runner
+sits anywhere in the path: a hosted service a session cannot reach is replaced by a local one a
+`.claude/session-up.d` hook starts, and step 3 says what that holds.
 
 Every PR carries one, a refactor included: its **blast radius** is the screens exercising the
 code it changed, and showing those still working is the whole of what it can prove.
@@ -46,9 +46,8 @@ until `git fetch origin <kitchen.baseBranch>` makes it one.
 | ------------------------------------------------ | --------------------------------------------------- |
 | `kitchen.expo.routesDir/**`                      | that route                                          |
 | the rest of `kitchen.expo.appDir`                | grep its importers up to a route                    |
-| `packages/api/**`                                | the screens calling that procedure                  |
-| `packages/*`                                     | the router importing it, then that router's screens |
-| `apps/nextjs/src/app/api/**`                     | the screens the changed procedure serves            |
+| the backend the `stack` adapter starts           | the screens calling the changed endpoint            |
+| a shared package outside the app                 | its importers, up to a route                        |
 | `tooling/`, `.github/`, `.claude/`, `docs/`      | the smoke screen                                    |
 | `kitchen.flows/**`                               | the screens those flows reach, and each changed flow is shot itself |
 
@@ -73,11 +72,9 @@ It prints the paths that are not prose, an image or a font. Nothing printed is t
 whose comment is a line naming what you checked instead of a pair; a single path printed
 puts the smoke screen back.
 
-A change to what a word's definition shows — a sense, gloss, tag, "Other meanings" group or
-the English word sheet — reaches a second surface: the same screen with **App language** set to
-日本語 (Settings → App language, where the app has it). Shoot the pair in both languages and
-name the language in each row's `What`. A definition feature seen only in English has not been
-verified for the user who reads the chrome in Japanese.
+A project whose `CLAUDE.md` names a second surface for a kind of change — another app language,
+a dark theme — reaches that surface too: shoot the pair on both and name the surface in each
+row's `What`. A change seen on one of them has not been verified for the user who reads the other.
 
 Recompute this every lap. The radius comes from the diff, and the diff grows as fix commits
 land — a list carried over from the last lap misses the screen a fix broke.
@@ -93,8 +90,8 @@ and that flow is what the `Steps` cell carries — one command a reader reruns.
 A screen no flow reaches earns a flow, checked in: hand taps prove one run, a flow proves
 every run after it.
 
-A flow that reads the dictionary is a flow like the rest. the session's hooks (`.claude/session-up.d`) start a local
-Mongo for it, so nothing here sets one apart.
+A flow whose screen reads a hosted service is a flow like the rest. The session's hooks
+(`.claude/session-up.d`) start a local stand-in for it, so nothing here sets one apart.
 
 Done when every screen in scope names a flow file.
 
@@ -127,12 +124,11 @@ side is `blocked`, and so is `session-up failed`.
 Halves that match, on a diff claiming a visible change, is a finding: either the change never
 reached the screen, or the steps never reached the change.
 
-**The dictionary** is a local Mongo that a [`session-up.sh`](../../kitchen/scripts/session-up.sh) hook starts
-through [`mongo-up.sh`](../../scripts/mongo-up.sh) and points `MONGODB_URL` at, over the hosted
-one the container exports and cannot resolve. It holds the fixture dictionary the checkout's own
-`load-fixture-dictionary` writes, and nothing from the real import: a headword outside the fixture
-reads as not found, on both halves. A flow whose screen needs a real headword says so in its
-`What` cell. The hosted dictionary is never read or written from a session.
+**A local stand-in** — a service a [`session-up.sh`](../../kitchen/scripts/session-up.sh) hook
+starts in place of a hosted one the container cannot resolve — holds the fixture data the
+checkout writes and nothing from production: a record outside the fixture reads as missing, on
+both halves. A flow whose screen needs real data says so in its `What` cell. The hosted service
+is never read or written from a session.
 
 Done when every flow printed `after=ok` and every shot has been opened. A flow that printed
 `after=failed` is `blocked`, and its failure shot says where it stopped.
@@ -202,7 +198,7 @@ its reason in the world, and carries an `Unblock` table where the reader holds w
 does not — a secret, a device, a signed-in session. A run that reached no pair at all says so
 in the short comment in [`BLOCKERS.core.md`](../../kitchen/docs/BLOCKERS.core.md#a-blocker-with-no-row) rather than a
 table of empty cells. Close the body's evidence on the **ceiling** — what the surface could
-not show — and on the scan: the QR `pr-preview.yml` posted, then the route and the tap that
+not show — and on the scan: the QR `kitchen-pr-preview.yml` posted, then the route and the tap that
 show the change landed.
 
 Done when the stored body holds one `<img src=` for every shot in step 5's output, none of
@@ -212,9 +208,12 @@ where the table would.
 ## 7. Gate the hand-over
 
 ```bash
-pnpm lint && pnpm format && pnpm typecheck && pnpm test
-pnpm drive <kitchen.flows>/checks/<name>.yaml      # each check the ticket's criteria earned
+pm=<kitchen.packageManager>
+$pm run lint && $pm run format && $pm run typecheck && $pm run test
+$pm run drive <kitchen.flows>/checks/<name>.yaml      # each check the ticket's criteria earned
 ```
+
+A script the project's `package.json` does not define is skipped and named in the verdict.
 
 Green here, not on trust — the checks included, run again on the head the PR hands over,
 because a review fix lands after the lap that turned them green.
@@ -235,8 +234,8 @@ verdict is one word.
 [`BLOCKERS.md`](../../BLOCKERS.md) and [`BLOCKERS.core.md`](../../kitchen/docs/BLOCKERS.core.md), searched for the error's words and never read whole, carry what these steps run into — the server that never
 answers, the flow with no state file, the database the container cannot reach, the push that
 is refused — each with the steps out.
-A pair the stack cannot shoot because it lacks a state the ticket needs — a dictionary headword,
-an analytics event no deploy has sent, a storage bucket or moderation key — has a row there
+A pair the stack cannot shoot because it lacks a state the ticket needs — a record outside the
+fixture, an analytics event no deploy has sent, a storage bucket or a third-party key — has a row there
 too, and `blocked`'s `Next` carries that row's steps, so the reader holds what supplies the state.
 Stopping is for a blocker with no row there, and
 [its own section](../../kitchen/docs/BLOCKERS.core.md#a-blocker-with-no-row) is what that posts.

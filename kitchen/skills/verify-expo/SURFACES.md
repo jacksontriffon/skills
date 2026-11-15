@@ -48,22 +48,22 @@ servers and signs in (`auth sign-in`);
 [`/evidence`](../evidence/SKILL.md) is that route end to end, and a session needs no runner and no
 other host for what it shot.
 
-A screen that reads the dictionary shoots there too. Hosted Mongo does not resolve from a
-container, so a `session-up.sh` hook starts a local one through
-[`mongo-up.sh`](../../scripts/mongo-up.sh), loads the checkout's fixture dictionary into it, and
-exports its URL over the hosted one the container carries. What it holds is the fixture, not the
-real import.
+A screen that reads a hosted service shoots there too. A hosted database or store that does not
+resolve from a container is replaced by a local one a `.claude/session-up.d` hook starts, loaded
+with the checkout's fixture and exported over the hosted URL the container carries. What it holds
+is the fixture, not production.
 
-[`shoot-expo-web.yml`](../../../.github/workflows/shoot-expo-web.yml) is a person's way to shoot a
+`kitchen-shoot-expo-web.yml` is a person's way to shoot a
 flow on a runner, and no skill dispatches it. A cold runner is far slower than a warm
 workstation, so its selectors want longer than the 15s `drive.mjs` defaults to: that workflow
 asks for 60s.
 
 Signed-in screens need `.claude/tmp/auth.json`. Producing one without a browser is the `auth`
 adapter's job (`kitchen.adapters.auth`): `sign-in`, once the API is started with `AUTH_DEV_LOGIN=1`,
-and `seed` runs the project's seed, which writes the account it signs in as, along with a study list that renders as content rather than an
-empty state. What that flag will and will not open the path against, and what the seed
-requires before it writes, are in [`fixtures/README.md`](../../../fixtures/README.md).
+and `seed` runs the project's seed, which writes the account it signs in as, along with whatever
+data makes its screens render as content rather than an empty state. What that flag will and will
+not open the path against, and what the seed requires before it writes, are in the auth adapter's
+[README](../../kitchen/adapters/auth/README.md) and the project's own fixtures.
 
 ```bash
 echo 'AUTH_DEV_LOGIN=1' >> .env      # the stack adapter starts the API through dotenv
@@ -105,7 +105,7 @@ timing · no real camera or sensors · GPU behaviour differs from a phone.
 
 ## iOS simulator, on GitHub Actions
 
-The `ios` job of [`.github/workflows/verify-expo.yml`](../../../.github/workflows/verify-expo.yml).
+The `ios` job of `.github/workflows/kitchen-verify-expo.yml`.
 Dispatch it, poll it, and read the shot URLs out of the run — no artifact download, and
 nothing about it needs macOS on your side.
 
@@ -122,11 +122,11 @@ infrastructure rather than GitHub's macOS runners, and hands back a link to inst
 this surface back — one click, nothing to re-write.
 
 ```
-workflow: verify-expo.yml   ref: <your branch>
+workflow: kitchen-verify-expo.yml   ref: <your branch>
 inputs:   platform=ios  flow=<kitchen.flows>  shot-prefix=<issue number>
 ```
 
-`gh workflow run verify-expo.yml --ref <branch> -f platform=ios -f shot-prefix=<issue number>` on a
+`gh workflow run kitchen-verify-expo.yml --ref <branch> -f platform=ios -f shot-prefix=<issue number>` on a
 workstation; through the GitHub MCP tools it is `actions_run_trigger`, then `actions_list`
 or `actions_get` to poll and `get_job_logs` to read the URLs back.
 
@@ -178,10 +178,9 @@ the base-URL resolver reaches its fallback and throws. `kitchen.expo.apiUrlEnv` 
 set explicitly and inlined at bundle time, which is two places rather than one:
 `eas.json` in `kitchen.expo.appDir` carries it on the `preview` profile, because EAS resolves a build's
 environment from the selected profile rather than from the shell that invoked it, and the
-workflow also sets it in the ambient environment. `http://localhost:3000` is the value:
-the simulator shares the runner's loopback, so the app's localhost is the runner's
-localhost. The install step greps the extracted bundle for that string and fails the run
-if it is absent, because a bundle missing it fails every flow on its first assertion
+workflow also sets it in the ambient environment, from the `API_URL` the `stack` adapter's `up`
+prints: the simulator shares the runner's loopback, so the app's localhost is the runner's
+localhost. A bundle missing it fails every flow on its first assertion
 instead of failing where the mistake is. Unverified in the same breath: iOS App Transport
 Security has to permit the plaintext hop, which Expo's prebuild template covers with
 `NSAllowsLocalNetworking`, and no run has confirmed that yet.
@@ -204,15 +203,15 @@ credits) or committing the prebuild output.
 
 **Ceiling.** Simulator timing rather than device timing · no real camera or sensors ·
 Metal behaviour differs from a phone · Dynamic Island and haptics unmodelled · **no
-session**: the flows tagged `signed-in` reach `/home` by deep link, and no signed-in
-screen calls tRPC yet, so the shots are of screens drawing static content. A native
+session**: the flows tagged `signed-in` reach their route by deep link, so a signed-in
+screen draws whatever it shows with no account. A native
 session lives in the expo client's SecureStore, which nothing writes and `xcrun simctl
 keychain` cannot inject, so the job sets `AUTH_DEV_LOGIN=1` to leave the API's headless
 path open and no step yet walks through it.
 
 ## The Android job the workflow still needs
 
-`verify-expo.yml` has no `android` job, and its `platform` input offers only `ios` until
+`kitchen-verify-expo.yml` has no `android` job, and its `platform` input offers only `ios` until
 one exists. This is the shape it takes:
 
 ```yaml
@@ -221,7 +220,8 @@ android:
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v5
-    - uses: ./tooling/github/setup
+    - uses: actions/setup-node@v5
+    - run: .claude/kitchen/scripts/install.sh
     - name: Enable KVM
       run: |
         echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
@@ -243,9 +243,9 @@ reaches the runner's API on `10.0.2.2` rather than on loopback, so
 `kitchen.expo.apiUrlEnv` differs.
 
 One trap not to inherit: a `pull_request` filter of `["*"]` skips every stacked branch,
-because `*` does not match `/` in a GitHub branch filter. `verify-expo.yml` is
-`workflow_dispatch` only, which sidesteps it, and `.github/workflows/ci.yml` already uses
-`["**"]` — match that before giving either one a `pull_request` trigger.
+because `*` does not match `/` in a GitHub branch filter. `kitchen-verify-expo.yml` is
+`workflow_dispatch` only, which sidesteps it — use `["**"]` before giving it a `pull_request`
+trigger.
 
 ## Driving past the launch screen
 
@@ -257,7 +257,7 @@ name a flow rather than repeating its taps.
 
 ```bash
 APP_URL=$(.claude/kitchen/scripts/dev-server.sh start)
-pnpm drive <kitchen.flows>/flows/<name>.yaml  # shots land in .claude/tmp/shots/
+node .claude/kitchen/scripts/drive.mjs <kitchen.flows>/flows/<name>.yaml  # shots land in .claude/tmp/shots/
 ```
 
 Maestro runs the same files against an emulator, a simulator and a physical iPhone; on
@@ -280,8 +280,8 @@ gate for a release, rather than something to reach for on a change.
 
 ## Your own iPhone, on a development build
 
-The highest-fidelity surface available, and the only one that answers the camera and the
-on-device OCR module. Needs an Apple Developer Program membership and the device
+The highest-fidelity surface available, and the only one that answers the camera and any
+on-device native module. Needs an Apple Developer Program membership and the device
 registered against it; the `development` profile in `eas.json` under `kitchen.expo.appDir` is
 otherwise ready as written.
 
@@ -293,8 +293,7 @@ API's port, so the API has to be up and reachable _from the phone_. A tunnel
 beats the LAN fallback, and OAuth needs one.
 
 **Ceiling.** Only the hardware in your hand · no agent can drive it, so every step is
-manual and no shot is automatic · the v1 client is fixtures, so nothing past layout,
-native rendering and the OCR module is under test at all.
+manual and no shot is automatic.
 
 ## A native change, and the build that carries it
 
@@ -308,11 +307,11 @@ refusal, because `requireNativeModule` runs when the route evaluates.
 So bump `version` in `app.config.ts` under `kitchen.expo.appDir` whenever native linkage changes, then build:
 
 ```bash
-cd <kitchen.expo.appDir> && pnpm dlx eas-cli@latest build --platform ios --profile development --non-interactive --no-wait --json
+cd <kitchen.expo.appDir> && npx eas-cli@latest build --platform ios --profile development --non-interactive --no-wait --json
 ```
 
 `eas build` evaluates the app config locally, so the worktree needs its own
-`node_modules` — `pnpm install --frozen-lockfile` first, in a fresh worktree.
+`node_modules` — `.claude/kitchen/scripts/install.sh` first, in a fresh worktree.
 
 ### A green build is not evidence the native code is in it
 

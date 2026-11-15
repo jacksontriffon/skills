@@ -80,11 +80,11 @@ who can act.
 
 ## 4. Close on the scan
 
-`pr-preview.yml` publishes an update and comments a **QR code** on every push, so the reader
+`kitchen-pr-preview.yml` publishes an update and comments a **QR code** on every push, so the reader
 already has this branch in their hand. The last line spends that: what to scan, then the route
 and the tap that shows the ask landed.
 
-`Scan the preview QR · Library → any video → tap a word · the reading shows`
+`Scan the preview QR · Settings → Profile → tap Save · the new name shows`
 
 A native change has no update to scan — the workflow says so on the PR — so the line names the
 build carrying it instead. A diff reaching no screen names the command that checks it.

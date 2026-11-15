@@ -48,4 +48,4 @@ another host, and never a shot of somebody else's page.
 | `raw.githubusercontent.com` links to a committed file | In a private repo the anonymous fetch GitHub makes for a comment image 404s. The `github.com/…/blob/<sha>/…?raw=true` form is fetched as the signed-in viewer and renders.        |
 | Shots committed to the PR's own branch                | They ride into the base branch on merge and bloat every clone. The `evidence/<pr>` branch is never merged.                                                                         |
 
-A project's own dead ends are in its [`docs/agents/evidence-hosting.md`](../../../docs/agents/evidence-hosting.md).
+A project's own dead ends are in its `docs/agents/evidence-hosting.md`, where it keeps one.
