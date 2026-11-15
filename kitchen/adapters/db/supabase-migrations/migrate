@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Create a migration file with the CLI, and refuse one that is not an expand.
+#
+#   adapter.mjs db migrate --name <what_it_does> [--sql <file>]
+#
+# There is no schema to diff, so the SQL is the agent's: `--sql` copies a file into the new
+# migration, and the rule then holds it, the same one postgres-drizzle holds. Without `--sql` the
+# file is created empty and checked as empty, so a file edited by hand afterwards is not held to
+# the rule by anything. Prints the tag it wrote (<version>_<name>) on stdout.
+set -euo pipefail
+
+# shellcheck source=../../lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib.sh"
+# shellcheck source=../../lib-supabase.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib-supabase.sh"
+HERE="$(dirname "${BASH_SOURCE[0]}")"
+
+MIGRATIONS="$SUPABASE_DIR/supabase/migrations"
+
+name=""
+sql=""
+while (($# > 0)); do
+  case "$1" in
+    --name) name="${2:-}"; shift 2 ;;
+    --sql) sql="${2:?--sql needs a file}"; shift 2 ;;
+    *) echo "usage: adapter.mjs db migrate --name <what_it_does> [--sql <file>]" >&2; exit 2 ;;
+  esac
+done
+[[ -n "$name" ]] || { echo "migrate needs --name <what_it_does>" >&2; exit 2; }
+[[ "$name" =~ ^[a-z0-9_]+$ ]] || { echo "--name $name is not a name a migration file can carry: it holds [a-z0-9_] and nothing else, so \`pending\` can read it back" >&2; exit 2; }
+[[ -z "$sql" || -f "$sql" ]] || { echo "--sql names $sql, which is not a file" >&2; exit 2; }
+require_cli
+
+listing() { { ls "$MIGRATIONS" 2>/dev/null || true; } | sed -n 's/\.sql$//p'; }
+
+before="$(listing)"
+sb migration new "$name"
+written="$(comm -13 <(printf '%s\n' "$before" | sort) <(listing | sort))"
+[[ -n "$written" ]] || fail "\`migration new\` wrote no file under $MIGRATIONS"
+
+if [[ -n "$sql" ]]; then
+  while IFS= read -r tag; do cat "$sql" >>"$MIGRATIONS/$tag.sql"; done <<<"$written"
+fi
+
+# shellcheck disable=SC2086
+EXPAND_EMPTY_NOTE=". Pass its SQL with --sql <file> to have it held to the expand rule: a file edited by hand afterwards is not checked." \
+  node "$HERE/../expand.mjs" "$MIGRATIONS" $before

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Whatever arguments come, there is no schema to write a migration for.
+echo "adapters.db is none: nothing to migrate" >&2
+exit 0

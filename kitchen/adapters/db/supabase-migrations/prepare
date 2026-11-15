@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Bring the local stack's database to exactly the migrations in the checkout.
+#
+# `db reset --local` rebuilds the database from supabase/migrations every time, and that is what
+# a session needs: a Before checkout can lack a migration the branch added, and `migration up`
+# refuses a ledger that holds one the checkout does not. Starts the stack first when it is down,
+# since the reset needs it. With `urlEnv` set, prints `<urlEnv>=<the database URL>`.
+set -euo pipefail
+
+# shellcheck source=../../lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib.sh"
+# shellcheck source=../../lib-supabase.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib-supabase.sh"
+
+URL_ENV="$(setting settings.urlEnv)"
+
+ensure_started
+sb db reset --local
+
+if [[ -n "$URL_ENV" ]]; then
+  is_running || fail "the local stack stopped answering \`status\` after the reset"
+  url="$(status_value DB_URL)"
+  [[ -n "$url" ]] || fail "\`supabase status\` printed no DB_URL for $URL_ENV"
+  echo "$URL_ENV=$url"
+fi

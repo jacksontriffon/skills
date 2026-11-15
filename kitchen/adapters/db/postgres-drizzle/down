@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Stop the cluster `prepare` started. Fine when there is none to stop.
+set -uo pipefail
+
+# shellcheck source=../../lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib.sh"
+
+pg_ctlcluster "$(setting settings.version 16)" main stop >/dev/null 2>&1 || true

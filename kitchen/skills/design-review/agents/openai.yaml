@@ -1,0 +1,3 @@
+interface:
+  display_name: "Design Review"
+  short_description: "Compare built screens against their design"

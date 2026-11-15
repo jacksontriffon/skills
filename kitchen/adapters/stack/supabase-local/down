@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Stop the local stack, which keeps its data, and forget its URL. Quiet when nothing runs.
+set -euo pipefail
+
+# shellcheck source=../../lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib.sh"
+# shellcheck source=../../lib-supabase.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib-supabase.sh"
+
+stop_stack
+rm -f "$STATE_DIR/dev-server.api.url"

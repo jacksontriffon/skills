@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# An app with no accounts is signed in as nobody: a Playwright storageState holding nothing, at the
+# path the other adapters write, so what loads a state file finds one that parses.
+set -euo pipefail
+
+# shellcheck source=../../lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib.sh"
+
+out="$STATE_DIR/auth.json"
+while (($# > 0)); do
+  case "$1" in
+    --email | --api-url | --app-url) shift 2 ;;
+    --out) out="${2:?--out needs a path}"; shift 2 ;;
+    *) echo "usage: adapter.mjs auth sign-in [--email <e>] [--api-url <u>] [--app-url <u>] [--out <path>]" >&2; exit 2 ;;
+  esac
+done
+
+mkdir -p "$(dirname "$out")"
+printf '{\n  "cookies": [],\n  "origins": []\n}\n' >"$out"
+echo "$out"

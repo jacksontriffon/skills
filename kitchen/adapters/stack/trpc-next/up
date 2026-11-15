@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Start the Next.js app that serves auth and tRPC, on the first free port from `port`, and print
+# `API_URL=<url>`. A second call while it is up prints the same URL and starts nothing.
+#
+# Settings: `dir` (the app, relative to the repo root), `filter` (a turbo filter that builds the
+# app's dependencies and then starts it; without one, the app's own `dev` script runs from `dir`)
+# and `port` (default 3000). State lives in .claude/tmp/dev-server.api.{pid,url} and the log in
+# .claude/tmp/dev-server.log, where drive.mjs and the BLOCKERS rows look for them.
+set -euo pipefail
+
+# shellcheck source=../../lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib.sh"
+
+DIR="$(setting settings.dir .)"
+FILTER="$(setting settings.filter)"
+FIRST_PORT="$(setting settings.port 3000)"
+PID_FILE="$STATE_DIR/dev-server.api.pid"
+URL_FILE="$STATE_DIR/dev-server.api.url"
+LOG_FILE="$STATE_DIR/dev-server.log"
+NEXT_DEV_LOCK="$REPO_ROOT/$DIR/.next/dev/lock"
+READY_TIMEOUT="${READY_TIMEOUT:-300}"
+
+mkdir -p "$STATE_DIR"
+
+port_is_free() {
+  ! (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+}
+
+if [[ -f "$PID_FILE" && -f "$URL_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+  echo "API_URL=$(cat "$URL_FILE")"
+  exit 0
+fi
+
+: >"$LOG_FILE"
+
+if [[ ! -f "$REPO_ROOT/.env" && -f "$REPO_ROOT/.env.example" ]]; then
+  cp "$REPO_ROOT/.env.example" "$REPO_ROOT/.env"
+  echo "no .env; copied .env.example, which boots but reaches nothing" >&2
+fi
+
+# A held lock makes next bind the next port instead and then die against it, but the lock
+# outlives the process that took it. Neither check alone proves staleness — a next-server on
+# some other port would still hold a live lock while the first port reads free — so require both.
+if [[ -e "$NEXT_DEV_LOCK" ]] && port_is_free "$FIRST_PORT" && ! pgrep -f next-server >/dev/null 2>&1; then
+  rm -rf "$NEXT_DEV_LOCK"
+fi
+
+port="$FIRST_PORT"
+while ! port_is_free "$port"; do port=$((port + 1)); done
+url="http://localhost:$port"
+
+# exec setsid makes this process its own session/process-group leader, so $! also names that
+# group. `turbo watch` restarts next whenever a dependency's tsc lands after next is up, and the
+# restarted next can lose the port to the one it replaces; one `turbo run` builds the
+# dependencies first, then starts next once.
+if [[ -n "$FILTER" ]]; then
+  (cd "$REPO_ROOT" && exec env PORT="$port" setsid "${PM_EXEC[@]}" turbo run dev -F "$FILTER" --continue) >>"$LOG_FILE" 2>&1 &
+else
+  (cd "$REPO_ROOT/$DIR" && exec env PORT="$port" setsid "$PACKAGE_MANAGER" run dev) >>"$LOG_FILE" 2>&1 &
+fi
+echo $! >"$PID_FILE"
+echo "$url" >"$URL_FILE"
+
+# Waits on a URL rather than on the port, so a server that binds and then dies on a build error
+# fails here instead of at the first request.
+waited=0
+until curl -sSf -o /dev/null "$url" 2>/dev/null; do
+  if ! kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+    echo "api server exited before answering; see $LOG_FILE" >&2
+    tail -20 "$LOG_FILE" >&2
+    exit 1
+  fi
+  if ((waited >= READY_TIMEOUT)); then
+    echo "api server did not answer within ${READY_TIMEOUT}s; see $LOG_FILE" >&2
+    tail -20 "$LOG_FILE" >&2
+    exit 1
+  fi
+  sleep 2
+  waited=$((waited + 2))
+done
+
+echo "API_URL=$url"
