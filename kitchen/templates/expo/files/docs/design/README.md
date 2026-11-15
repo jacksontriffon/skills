@@ -1,9 +1,19 @@
-# Design
+# Design export
 
-Where the design for this app comes from, for `/design-setup` and `/design-review`.
+`/design-review` compares the built screen against the design it was built from. The design side is a Claude Design export, committed here and served by `.claude/kitchen/scripts/design-server.sh`.
 
-- **Source:** _not set yet_. `/kitchen-setup` asks for it: a Figma file, a Claude design, or exported frames committed under this folder.
-- **Exports:** frames live beside this file, one folder per screen, named after the route under `{{ROUTES_DIR}}`.
-- **Tokens:** colours, type and spacing come from the app's theme, never from a screenshot.
+| File | What it holds |
+| --- | --- |
 
-What the shipped app does differently on purpose is recorded in [`DEVIATIONS.md`](DEVIATIONS.md). A difference not listed there is a bug.
+`/design-setup` fills this table. One export is the one design, and the source of truth. A new export replaces it, and the old one is deleted in the same commit. `STATES.md` names each state and the acts that reach it.
+
+Deliberate differences between the design and the app are rows in [`DEVIATIONS.md`](DEVIATIONS.md).
+
+## Reaching a screen
+
+A screen is a `>`-separated tap path of visible text, one click each. The `shoot-design` workflow takes it as a chip, and `capture.mjs` clicks it in order. Shoot at `phone`.
+
+| Screen | Chip | What the taps do |
+| --- | --- | --- |
+
+`/design-setup` fills this table too.
