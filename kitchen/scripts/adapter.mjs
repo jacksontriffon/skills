@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { CONFIG, load } from "./kitchen.mjs";
+import { ROOT } from "./layout.mjs";
 
 export const CONTRACT = {
   stack: ["up", "down"],
@@ -12,7 +13,6 @@ export const CONTRACT = {
   evidenceHost: ["push"],
 };
 
-const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 
 const ADAPTERS = new URL("../adapters/", import.meta.url);
 

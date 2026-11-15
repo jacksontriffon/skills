@@ -1,4 +1,7 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { at, exists, ROOT } from "./layout.mjs";
 
 export const UNATTENDED = [
   "code-review",
@@ -29,6 +32,26 @@ export const UNATTENDED = [
   "unblock",
   "verify-expo",
 ];
+
+export const V2 = [
+  "content-design",
+  "content-draft",
+  "content-fix",
+  "content-judge",
+  "content-loop",
+  "content-monitor",
+  "content-promote",
+  "content-publish",
+  "content-research",
+  "merge-order",
+  "retest-pr",
+  "test-pr",
+];
+
+export const carried = (name) => exists(`.claude/skills/${name}/SKILL.md`);
+
+export const notCarried = (name) =>
+  !carried(name) && V2.includes(name) && `${name} is a v2 skill this checkout does not carry`;
 
 const FRONTMATTER = /^---\n([\s\S]*?)\n---\n/;
 const STEP = /^## (\d+)\. (.+)$/gm;
@@ -88,8 +111,5 @@ export function checkShape(name, source) {
 }
 
 export function readSkill(name) {
-  return readFileSync(
-    new URL(`../../skills/${name}/SKILL.md`, import.meta.url),
-    "utf8",
-  );
+  return readFileSync(join(ROOT, at(`.claude/skills/${name}/SKILL.md`)), "utf8");
 }

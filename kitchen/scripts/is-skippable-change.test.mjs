@@ -113,7 +113,7 @@ describe("the preview runner", () => {
     "tooling/github/setup/action.yml",
     "scripts/ensure-env.mjs",
     "pnpm-lock.yaml",
-    ".github/workflows/pr-preview.yml",
+    ".github/workflows/kitchen-pr-preview.yml",
     ".claude/kitchen/scripts/is-native-change.mjs",
     ".claude/kitchen/scripts/is-skippable-change.mjs",
   ]) {

@@ -3,11 +3,9 @@ import { fileURLToPath } from "node:url";
 
 import { embedPrefixes, shotUrls } from "./comment-body.mjs";
 import { escapeRegExp, load } from "./kitchen.mjs";
+import { matches } from "./risk.mjs";
 
-const DB_PATHS = [
-  /^packages\/db\/src\/schema(\.ts$|\/)/,
-  /^packages\/db\/migrations\//,
-];
+const dbPaths = (kitchen) => kitchen.adapters.db.paths ?? [];
 
 const SKILL_PATHS = [/^\.claude\//, /^docs\/agents\//, /^CLAUDE\.md$/];
 
@@ -30,7 +28,7 @@ export function owned(kitchen) {
 export function labelsFor({ paths = [], body = "" }, kitchen = load()) {
   const names = owned(kitchen);
   const labels = [];
-  if (paths.some((path) => DB_PATHS.some((pattern) => pattern.test(path))))
+  if (paths.some((path) => dbPaths(kitchen).some((glob) => matches(glob, path))))
     labels.push(names.db);
   if (paths.some((path) => SKILL_PATHS.some((pattern) => pattern.test(path))))
     labels.push(names.skill);

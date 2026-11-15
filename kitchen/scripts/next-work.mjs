@@ -4,10 +4,10 @@ import { fileURLToPath } from "node:url";
 import { parse as parseBlocker } from "./blocked.mjs";
 import { TICKET_WINDOW_MINUTES, WINDOW_MINUTES } from "./claims.mjs";
 import { load } from "./kitchen.mjs";
+import { ROOT } from "./layout.mjs";
 
 export const QUEUES = ["unblock", "drive", "ticket"];
 export const LANE = "--- DO NOT MERGE — TEST:";
-const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const SELF = ".claude/kitchen/scripts/next-work.mjs";
 
 // A pending status that old is a check that never reports, not CI still running on a push.

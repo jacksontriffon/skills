@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { before, describe, it } from "node:test";
 
-const REAL = new URL("../../..", import.meta.url).pathname;
+import { at, ROOT as REAL } from "./layout.mjs";
 
 function git(cwd, ...args) {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -51,11 +51,12 @@ function setup(root) {
   git(seed, "config", "user.email", "t@example.com");
   const scripts = join(".claude", "kitchen", "scripts");
   mkdirSync(join(seed, scripts), { recursive: true });
-  for (const file of ["shoot-pair.sh", "kitchen.mjs"]) {
-    copyFileSync(join(REAL, scripts, file), join(seed, scripts, file));
+  for (const file of ["shoot-pair.sh", "kitchen.mjs", "layout.mjs"]) {
+    copyFileSync(join(REAL, at(".claude/kitchen/scripts"), file), join(seed, scripts, file));
   }
+  copyFileSync(join(REAL, at(".claude/kitchen/kitchen.schema.json")), join(seed, ".claude", "kitchen", "kitchen.schema.json"));
   chmodSync(join(seed, scripts, "shoot-pair.sh"), 0o755);
-  copyFileSync(join(REAL, ".claude", "kitchen.json"), join(seed, ".claude", "kitchen.json"));
+  copyFileSync(join(REAL, at(".claude/kitchen.json")), join(seed, ".claude", "kitchen.json"));
   write(join(seed, scripts, "drive.mjs"), DRIVE_STUB);
   write(
     join(seed, scripts, "session-up.sh"),
@@ -63,7 +64,7 @@ function setup(root) {
     0o755,
   );
   write(join(seed, scripts, "dev-server.sh"), "#!/bin/sh\nexit 0\n", 0o755);
-  write(join(seed, ".claude", "session-up.d", "10-dictionary"), "#!/bin/sh\nexit 0\n", 0o755);
+  write(join(seed, ".claude", "session-up.d", "10-store"), "#!/bin/sh\nexit 0\n", 0o755);
   write(join(seed, ".maestro", "flows", "a.yaml"), "name: a\n");
   write(join(seed, ".maestro", "flows", "b.yaml"), "name: b\n");
   git(seed, "add", "-A");

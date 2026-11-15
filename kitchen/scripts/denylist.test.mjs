@@ -6,8 +6,8 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { denylist } from "./kitchen.mjs";
+import { ROOT } from "./layout.mjs";
 
-const ROOT = new URL("../../../", import.meta.url);
 const KITCHEN = new URL("../", import.meta.url);
 
 const listFile = (text) => {
@@ -38,7 +38,7 @@ describe("the kitchen names no project", () => {
     .map((entry) => fileURLToPath(new URL(entry.name, `file://${entry.parentPath}/`)));
 
   for (const file of files) {
-    it(`${relative(fileURLToPath(ROOT), file)} carries nothing from kitchen-denylist.txt`, () => {
+    it(`${relative(ROOT, file)} carries nothing from kitchen-denylist.txt`, () => {
       const text = readFileSync(file, "utf8").toLowerCase();
       assert.deepEqual(
         literals.filter((literal) => text.includes(literal)),

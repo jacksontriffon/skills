@@ -3,17 +3,18 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, posix } from "node:path";
 import { describe, it } from "node:test";
-import { fileURLToPath } from "node:url";
 
-const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-const read = (path) => readFileSync(join(ROOT, path), "utf8");
+import { at, exists, ROOT, vendored } from "./layout.mjs";
+import { WORKFLOWS } from "./doctor.mjs";
+
+const read = (path) => readFileSync(join(ROOT, at(path)), "utf8");
 
 const BACKENDS = [/drizzle/i, /better[- ]?auth/i, /posthog/i, /supabase/i];
 
 const filesUnder = (dir) =>
-  readdirSync(join(ROOT, dir)).flatMap((name) => {
+  readdirSync(join(ROOT, at(dir))).flatMap((name) => {
     const path = join(dir, name);
-    return statSync(join(ROOT, path)).isDirectory() ? filesUnder(path) : [path];
+    return statSync(join(ROOT, at(path))).isDirectory() ? filesUnder(path) : [path];
   });
 
 const CORE_SKILLS = [
@@ -32,6 +33,7 @@ const CORE_SKILLS = [
   "design-review",
   "design-setup",
   "verify-expo",
+  "kitchen-setup",
 ];
 
 const CORE_AGENTS = [
@@ -44,27 +46,20 @@ const CORE_AGENTS = [
   "blocker-fixer",
 ];
 
-const UNTIL_WORKFLOWS_READ_CONFIG = [/posthog/i, /supabase/i];
-
 const EXEMPT = {
-  "verify-expo.yml": UNTIL_WORKFLOWS_READ_CONFIG,
-  "pr-preview.yml": UNTIL_WORKFLOWS_READ_CONFIG,
-  "shoot-expo-web.yml": [/supabase/i],
-  "kitchen.mjs": [/supabase/i],
+  "kitchen.schema.json": [/supabase/i],
   "is-skippable-change.mjs": [/supabase/i],
 };
 
-const STANDS_IN_FOR_A_BACKEND = /\.test\.mjs$|-stub\.mjs$|-fixtures\.mjs$/;
+const STANDS_IN_FOR_A_BACKEND = /\.test\.mjs$|-stub\.mjs$|-fixtures\.mjs$|\/fixtures\//;
 
 const CORE = [
   ...filesUnder(".claude/kitchen/scripts").filter((path) => !STANDS_IN_FOR_A_BACKEND.test(path)),
   ...filesUnder(".claude/kitchen/docs"),
   ...CORE_SKILLS.flatMap((skill) => filesUnder(`.claude/skills/${skill}`)),
   ...CORE_AGENTS.map((agent) => `.claude/agents/${agent}.md`),
-  ".github/workflows/shoot-expo-web.yml",
-  ".github/workflows/shoot-design.yml",
-  ".github/workflows/verify-expo.yml",
-  ".github/workflows/pr-preview.yml",
+  ".claude/kitchen/kitchen.schema.json",
+  ...WORKFLOWS.map((name) => `.github/workflows/kitchen-${name}.yml`),
 ];
 
 describe("no core file names a backend an adapter owns", () => {
@@ -82,7 +77,7 @@ describe("no core file names a backend an adapter owns", () => {
       assert.ok(CORE.some((path) => path.endsWith(`/${name}`)), `${name} is exempt but not checked`);
       assert.ok(patterns.length > 0);
     }
-    assert.equal(CORE.some((path) => path.includes(".claude/kitchen/adapters/")), false);
+    assert.equal(CORE.some((path) => path.startsWith(".claude/kitchen/adapters/")), false);
   });
 
   it("covers the supabase adapters' files with the same rule the other adapters' files are under: they are adapter files, not core", () => {
@@ -134,36 +129,37 @@ describe("what moved is where it now lives", () => {
   ];
 
   for (const path of MOVED) it(`${path} exists and is executable where it is a script`, () => {
-    assert.ok(existsSync(join(ROOT, path)), `${path} is missing`);
-    if (!path.endsWith(".mjs")) assert.ok(statSync(join(ROOT, path)).mode & 0o111, `${path} is not executable`);
+    assert.ok(exists(path), `${path} is missing`);
+    if (!path.endsWith(".mjs")) assert.ok(statSync(join(ROOT, at(path))).mode & 0o111, `${path} is not executable`);
   });
 
-  for (const path of GONE) it(`${path} is gone`, () => assert.equal(existsSync(join(ROOT, path)), false));
+  for (const path of GONE) it(`${path} is gone`, () => assert.equal(exists(path), false));
 
   it("session-up.sh and dev-server.sh are executable", () => {
     for (const name of ["session-up.sh", "dev-server.sh", "push-shots.sh"])
-      assert.ok(statSync(join(ROOT, ".claude/kitchen/scripts", name)).mode & 0o111, name);
+      assert.ok(statSync(join(ROOT, at(`.claude/kitchen/scripts/${name}`))).mode & 0o111, name);
   });
 
   const TEXT = /\.(md|mjs|sh|ya?ml|json|ts|txt)$/;
   const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" })
     .split("\n")
     .filter((path) => TEXT.test(path) && !path.endsWith("pnpm-lock.yaml") && !path.endsWith("adapter-boundary.test.mjs"))
-    .filter((path) => existsSync(join(ROOT, path)));
+    .filter((path) => existsSync(join(ROOT, path)))
+    .map((path) => ({ path, as: vendored(path) }));
 
   const MOVED_PATH = /(?<![\w./$-])((?:\.{1,2}\/|[\w.-]+\/)+)(session-up\.sh|dev-server\.sh|dev-login\.mjs|migration-sql(?:\.test)?\.mjs)(?![\w.-])/g;
 
-  const staleReferences = (path, text, exists = (candidate) => existsSync(join(ROOT, candidate))) => [
+  const staleReferences = (path, text, found = exists) => [
     ...(/dev-login\.mjs/.test(text) ? [`${path}: dev-login.mjs`] : []),
     ...[...text.matchAll(MOVED_PATH)]
       .map((match) => match[0])
-      .filter((target) => !exists(posix.normalize(posix.join(posix.dirname(path), target))) && !exists(posix.normalize(target)))
+      .filter((target) => !found(posix.normalize(posix.join(posix.dirname(path), target))) && !found(posix.normalize(target)))
       .map((target) => `${path}: ${target}`),
   ];
 
   it("nothing tracked still points at a moved script's old path", () => {
     assert.deepEqual(
-      tracked.flatMap((path) => staleReferences(path, read(path))),
+      tracked.flatMap(({ path, as }) => staleReferences(as, readFileSync(join(ROOT, path), "utf8"))),
       [],
     );
   });
@@ -175,8 +171,8 @@ describe("what moved is where it now lives", () => {
       ".claude/kitchen/scripts/migration-sql.test.mjs",
       ".claude/kitchen/adapters/db/postgres-drizzle/migration-sql.mjs",
     ]);
-    const exists = (candidate) => KITCHEN_SCRIPTS.has(candidate.replace(/^\.\//, ""));
-    const stale = (path, text) => staleReferences(path, text, exists);
+    const known = (candidate) => KITCHEN_SCRIPTS.has(candidate.replace(/^\.\//, ""));
+    const stale = (path, text) => staleReferences(path, text, known);
 
     const STALE_FIXTURES = {
       "a code span with the old .claude/scripts path": ["docs/a.md", "run `.claude/scripts/session-up.sh up`"],

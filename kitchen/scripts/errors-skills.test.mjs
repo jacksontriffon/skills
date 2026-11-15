@@ -5,11 +5,9 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { load } from "./kitchen.mjs";
+import { at, ROOT } from "./layout.mjs";
 
-const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-const GUIDE = ".claude/kitchen/adapters/errors/posthog/GUIDE.md";
-const PROJECT_DOC = "docs/observability/error-tracking.md";
-const SMOKE_TEST_SCRIPT = "packages/api/src/lib/observability/verify.manual.ts";
+const GUIDE = at(".claude/kitchen/adapters/errors/posthog/GUIDE.md");
 
 const SKILLS = {
   "search-errors": "search",
@@ -36,14 +34,12 @@ const filesUnder = (dir) =>
   });
 
 const textOf = (skill) =>
-  filesUnder(join(ROOT, ".claude/skills", skill))
+  filesUnder(join(ROOT, at(`.claude/skills/${skill}`)))
     .map((path) => readFileSync(path, "utf8"))
     .join("\n");
 
 const { errors } = load().adapters;
-// The smoke test names its fingerprint after the product, which kitchen.json carries.
-const SMOKE_TEST_FINGERPRINT = `${load().product.toLowerCase()}-error-tracking-smoke-test`;
-const pins = [errors.organization, errors.project, errors.projectName, errors.timezone, errors.decoyProject]
+const pins = [errors.organization, errors.project, errors.projectName, errors.timezone, errors.decoyProject, errors.doc]
   .filter((pin) => pin !== null && pin !== undefined)
   .map(String);
 
@@ -108,25 +104,14 @@ describe("what the skills used to carry has a home", () => {
       assert.ok(text.includes(call), `${call} is not in the guide`);
   });
 
-  it("the project's own doc keeps the sweep's skip rules and the smoke test's fingerprint", () => {
-    const text = readFileSync(join(ROOT, PROJECT_DOC), "utf8");
-    const skips = /^## What the sweep skips$([\s\S]*?)(?=^## )/m.exec(text);
-    assert.ok(skips, "no `## What the sweep skips` section");
-    assert.match(skips[1], /\$exception_fingerprint/);
-    assert.match(skips[1], /smoke test/);
-    assert.ok(skips[1].includes(`\`${SMOKE_TEST_FINGERPRINT}\``), `the section does not skip \`${SMOKE_TEST_FINGERPRINT}\``);
+  it("leaves the project's own error doc to the setting that names it", () => {
+    for (const skill of Object.keys(SKILLS)) {
+      assert.doesNotMatch(textOf(skill), /docs\/observability/, skill);
+      assert.match(textOf(skill), /`kitchen\.adapters\.errors\.doc`/, skill);
+    }
   });
 
-  it("the script that sends the smoke test fingerprints it with that same value", () => {
-    assert.ok(readFileSync(join(ROOT, SMOKE_TEST_SCRIPT), "utf8").includes(`"${SMOKE_TEST_FINGERPRINT}"`));
-  });
-
-  it("/fix-top-error sends the agent to that section, whose value is the one the script sends", () => {
-    assert.match(textOf("fix-top-error"), /error-tracking\.md#what-the-sweep-skips/);
-  });
-
-  it("the project's own doc keeps what each property on an event means", () => {
-    const text = readFileSync(join(ROOT, PROJECT_DOC), "utf8");
-    assert.match(text, /^## Reading the events$/m);
+  it("/fix-top-error sends the agent to the error doc's section on what the sweep skips", () => {
+    assert.match(textOf("fix-top-error"), /\*\*What the sweep skips\*\* in the error doc/);
   });
 });

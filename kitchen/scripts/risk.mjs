@@ -42,7 +42,7 @@ function globPattern(glob) {
   return GLOBS.get(glob);
 }
 
-const matches = (glob, path) => globPattern(glob).test(path);
+export const matches = (glob, path) => globPattern(glob).test(path);
 
 const rank = (tier) => TIERS.indexOf(tier);
 

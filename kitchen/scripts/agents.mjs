@@ -1,7 +1,9 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { load, MODELS } from "./kitchen.mjs";
+import { at, ROOT } from "./layout.mjs";
 
 const FRONTMATTER = /^---\n([\s\S]*?)\n---\n/;
 const FIELD = (name) => new RegExp(`^${name}: (\\S.*)$`, "m");
@@ -26,7 +28,7 @@ export const DEFAULT_MODELS = {
   "blocker-fixer": "inherit",
 };
 
-const AGENTS_DIR = new URL("../../agents/", import.meta.url);
+const AGENTS_DIR = pathToFileURL(join(ROOT, at(".claude/agents"), "/"));
 
 export function agentNames() {
   if (!existsSync(AGENTS_DIR)) return [];

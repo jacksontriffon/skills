@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -13,6 +13,7 @@ import {
   readMigrations,
 } from "../adapters/db/postgres-drizzle/migration-sql.mjs";
 import { load } from "./kitchen.mjs";
+import { ROOT } from "./layout.mjs";
 
 function migrationsDir(files) {
   const dir = mkdtempSync(join(tmpdir(), "migrations-"));
@@ -34,9 +35,9 @@ function migrationsDir(files) {
 
 const sha = (text) => createHash("sha256").update(text).digest("hex");
 
-const live = pathToFileURL(
-  join(fileURLToPath(new URL("../../../", import.meta.url)), load().adapters.db.dir, "migrations/"),
-);
+const liveDir = join(ROOT, load().adapters.db.dir ?? ".", "migrations");
+const live = pathToFileURL(`${liveDir}/`);
+const noLiveJournal = !existsSync(join(liveDir, "meta/_journal.json")) && `no migrations journal at ${liveDir}`;
 
 describe("readMigrations", () => {
   it("hashes each file the way drizzle's migrator records it", () => {
@@ -46,10 +47,11 @@ describe("readMigrations", () => {
     assert.equal(m.createdAt, 1790000000000);
   });
 
-  it("reads the live directory's journal in order", () => {
+  it("reads the live directory's journal in order", { skip: noLiveJournal }, () => {
     const tags = readMigrations(live).map((m) => m.tag);
+    assert.ok(tags.length > 0);
     assert.deepEqual(tags, [...tags].sort());
-    assert.equal(tags[0], "0000_short_black_queen");
+    assert.match(tags[0], /^0000_/);
   });
 
   it("refuses a tag that could break out of a quoted literal", () => {

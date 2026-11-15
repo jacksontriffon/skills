@@ -1,9 +1,14 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const CONFIG = new URL("../../kitchen.json", import.meta.url);
+import { at, ROOT } from "./layout.mjs";
 
-export const DENYLIST = new URL("../../../kitchen-denylist.txt", import.meta.url);
+export const CONFIG = pathToFileURL(join(ROOT, at(".claude/kitchen.json")));
+
+export const DENYLIST = pathToFileURL(join(ROOT, "kitchen-denylist.txt"));
+
+export const SCHEMA = JSON.parse(readFileSync(new URL("../kitchen.schema.json", import.meta.url), "utf8"));
 
 export const PACKAGE_MANAGERS = ["pnpm", "npm", "yarn", "bun"];
 
@@ -13,62 +18,21 @@ export const SLOTS = ["stack", "db", "auth", "errors", "evidenceHost"];
 
 export const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-export const DEFAULTS = {
-  repo: null,
-  product: null,
-  baseBranch: "main",
-  packageManager: "pnpm",
-  humans: { default: null, areas: {} },
-  labels: {
-    blocked: "blocked",
-    needsHuman: "needs-human",
-    readyForHuman: "ready-for-human",
-    autoMerge: "auto-merge",
-    riskLow: "risk:low",
-    riskMedium: "risk:medium",
-    riskHigh: "risk:high",
-    urgent: "urgent",
-    needsTriage: "needs-triage",
-    needsInfo: "needs-info",
-    wontfix: "wontfix",
-    decision: "decision",
-    dbChange: "db-change",
-    skillChange: "skill-change",
-    dependsOnPr: "depends-on-pr",
-    evidence: "evidence",
-    nativeChange: "native-change",
-    claimed: "claimed",
-  },
-  conventions: {
-    branch: "<initials>/<issue>-<slug>",
-    commit: "<gitmoji> <type>(#<issue>): <description>",
-    prTitle: "<gitmoji> <type>(#<issue>): <description>",
-  },
-  expo: {
-    appDir: ".",
-    routesDir: "app",
-    appId: null,
-    scheme: null,
-    webPort: 8081,
-    viewport: { width: 390, height: 844 },
-    apiUrlEnv: "EXPO_PUBLIC_API_URL",
-    nativeDirs: ["ios", "android"],
-    easUpdate: true,
-  },
-  flows: ".maestro",
-  design: "docs/design",
-  adapters: {
-    stack: "supabase-local",
-    db: "supabase-migrations",
-    auth: "supabase-auth",
-    errors: "none",
-    evidenceHost: "git-branch",
-  },
-  risk: { high: [], medium: [], largeDiffLines: 400 },
-  agents: {},
-  ci: { runner: "ubuntu-latest", macRunner: "macos-latest" },
-  routines: { work: "Kitchen work", errors: "Kitchen errors" },
-};
+const ref = (schema) =>
+  schema.$ref ? { ...SCHEMA.$defs[schema.$ref.split("/").at(-1)], ...schema } : schema;
+
+function defaultOf(schema) {
+  if ("default" in schema) return structuredClone(schema.default);
+  const { properties } = ref(schema);
+  if (!properties) return null;
+  return Object.fromEntries(
+    Object.entries(properties)
+      .filter(([key]) => key !== "$schema")
+      .map(([key, child]) => [key, defaultOf(child)]),
+  );
+}
+
+export const DEFAULTS = defaultOf(SCHEMA);
 
 const OWN_SHAPE = new Set(["humans", "agents", "adapters"]);
 
@@ -131,10 +95,42 @@ function agents(given = {}) {
   );
 }
 
+const typesOf = (schema) => [schema.type].flat();
+
+const at_ = (path, key) => (path ? `${path}.${key}` : key);
+
+export function validate(given, schema = SCHEMA, path = "") {
+  schema = ref(schema);
+  const where = path || "the file";
+  const types = typesOf(schema);
+  if (schema.type && !types.includes(kind(given)))
+    fail(where, `must be ${types.join(" or ")}, not ${kind(given)}`);
+  if (schema.enum && !schema.enum.includes(given)) fail(where, `must be one of ${schema.enum.join(", ")}`);
+  if (schema.pattern && typeof given === "string" && !new RegExp(schema.pattern).test(given))
+    fail(where, schema["x-message"] ?? `must match ${schema.pattern}`);
+  if (kind(given) === "array" && schema.items)
+    given.forEach((item, index) => validate(item, schema.items, `${where}[${index}]`));
+  if (kind(given) !== "object") return;
+  for (const key of schema.required ?? [])
+    if (given[key] === undefined) {
+      const child = ref(schema.properties?.[key] ?? {});
+      fail(at_(path, key), `must be ${typesOf(child).join(" or ")}, not undefined`);
+    }
+  for (const [key, value] of Object.entries(given)) {
+    const child = schema.properties?.[key];
+    if (child) validate(value, child, at_(path, key));
+    else if (schema.additionalProperties === false)
+      fail(at_(path, key), schema["x-unknown"] ?? "is not a key the kitchen reads");
+    else if (kind(schema.additionalProperties) === "object")
+      validate(value, schema.additionalProperties, at_(path, key));
+  }
+}
+
 const UNMATCHABLE_GLOB = /^\.\/|\/$|[{}?[\]\\]/;
 
 export function resolve(given) {
-  expect("the file", given, "object");
+  validate(given);
+  given = Object.fromEntries(Object.entries(given).filter(([key]) => key !== "$schema"));
   for (const key of Object.keys(given))
     if (!(key in DEFAULTS)) fail(key, "is not a key the kitchen reads");
 
@@ -213,6 +209,12 @@ export const workflowEnv = (config) => ({
   KITCHEN_SCHEME: config.expo.scheme ?? "",
   KITCHEN_FLOWS: config.flows,
   KITCHEN_BASE_BRANCH: config.baseBranch,
+  KITCHEN_PM: config.packageManager,
+  KITCHEN_DESIGN: config.design,
+  KITCHEN_API_URL_ENV: config.expo.apiUrlEnv,
+  KITCHEN_ENV_FILE: config.ci.envFile,
+  KITCHEN_PREVIEW_API: config.ci.previewApi ?? "",
+  KITCHEN_LABEL_NATIVE_CHANGE: config.labels.nativeChange,
 });
 
 const assignments = (map) =>

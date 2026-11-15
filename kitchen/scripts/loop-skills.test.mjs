@@ -5,8 +5,7 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { denylist, get, load, trusted } from "./kitchen.mjs";
-
-const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+import { at, exists, ROOT } from "./layout.mjs";
 
 const LOOP_SKILLS = [
   "find-work",
@@ -50,12 +49,12 @@ const filesUnder = (dir) =>
   });
 
 const textOf = (skill) =>
-  filesUnder(join(ROOT, ".claude/skills", skill))
+  filesUnder(join(ROOT, at(`.claude/skills/${skill}`)))
     .map((path) => readFileSync(path, "utf8"))
     .join("\n");
 
 const agentText = (agent) =>
-  readFileSync(join(ROOT, ".claude/agents", `${agent}.md`), "utf8");
+  readFileSync(join(ROOT, at(`.claude/agents/${agent}.md`)), "utf8");
 
 const kitchen = load();
 
@@ -131,7 +130,7 @@ describe("every script a kitchen skill runs is where it lives", () => {
     it(skill, () => {
       const missing = [...textOf(skill).matchAll(SCRIPT)]
         .map((match) => match[0])
-        .filter((path) => !existsSync(join(ROOT, path)));
+        .filter((path) => !exists(path));
       assert.deepEqual([...new Set(missing)], []);
     });
   }
@@ -177,8 +176,8 @@ describe("a PR the session cannot act on does not stop the loop reaching a ticke
     assert.ok(Object.hasOwn(kitchen.humans.areas, KEY.split(":")[0]));
   });
 
-  it("the key has a BLOCKERS row", () => {
-    const rows = readFileSync(join(ROOT, ".claude/BLOCKERS.md"), "utf8");
+  it("the key has a row in the kitchen's own blockers, since every project meets it", () => {
+    const rows = readFileSync(join(ROOT, at(".claude/kitchen/docs/BLOCKERS.core.md")), "utf8");
     assert.ok(rows.includes(KEY));
   });
 

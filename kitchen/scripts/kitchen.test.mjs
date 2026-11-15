@@ -3,6 +3,8 @@ import { execFileSync } from "node:child_process";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { readFileSync } from "node:fs";
+
 import {
   brief,
   DEFAULTS,
@@ -10,7 +12,9 @@ import {
   load,
   repoVariables,
   resolve,
+  SCHEMA,
   trusted,
+  validate,
   workflowEnv,
 } from "./kitchen.mjs";
 
@@ -197,6 +201,12 @@ describe("what the workflows read", () => {
       KITCHEN_SCHEME: "acme",
       KITCHEN_FLOWS: "e2e",
       KITCHEN_BASE_BRANCH: "trunk",
+      KITCHEN_PM: "pnpm",
+      KITCHEN_DESIGN: "docs/design",
+      KITCHEN_API_URL_ENV: "EXPO_PUBLIC_API_URL",
+      KITCHEN_ENV_FILE: ".env",
+      KITCHEN_PREVIEW_API: "",
+      KITCHEN_LABEL_NATIVE_CHANGE: "native-change",
     });
   });
 
@@ -213,4 +223,68 @@ describe("what the workflows read", () => {
 
 describe("this repo's kitchen.json", () => {
   it("resolves", () => assert.equal(load().humans.default.length > 0, true));
+});
+
+describe("kitchen.schema.json", () => {
+  const leavesOf = (schema, prefix = "") =>
+    Object.entries(schema.properties ?? {}).flatMap(([key, child]) => {
+      const path = prefix ? `${prefix}.${key}` : key;
+      return child.properties ? leavesOf(child, path) : [[path, child]];
+    });
+
+  it("is where the kitchen.json a project writes points its $schema", () => {
+    assert.equal(SCHEMA.title, "kitchen.json");
+    assert.deepEqual(resolve({ ...minimal, $schema: "./kitchen/kitchen.schema.json" }).repo, "acme/app");
+  });
+
+  it("is the one source of the defaults", () => {
+    assert.equal(DEFAULTS.adapters.stack, SCHEMA.properties.adapters.properties.stack.default);
+    assert.equal(DEFAULTS.ci.runner, SCHEMA.properties.ci.properties.runner.default);
+    assert.deepEqual(DEFAULTS.labels.blocked, "blocked");
+  });
+
+  it("defaults the backend to the Supabase adapters, error tracking off, and evidence on a branch", () => {
+    assert.deepEqual(DEFAULTS.adapters, {
+      stack: "supabase-local",
+      db: "supabase-migrations",
+      auth: "supabase-auth",
+      errors: "none",
+      evidenceHost: "git-branch",
+    });
+  });
+
+  it("types every key, and refuses one it does not list", () => {
+    for (const [path, child] of leavesOf(SCHEMA))
+      assert.ok(child.type || child.$ref || child.enum, `${path} has no type`);
+    assert.equal(SCHEMA.additionalProperties, false);
+  });
+
+  it("needs only the repo and a default human, so a fresh file stays two keys long", () => {
+    assert.deepEqual(SCHEMA.required, ["repo", "humans"]);
+    assert.doesNotThrow(() => resolve(minimal));
+  });
+
+  it("takes every key the kitchen's sample project sets", () => {
+    const sample = JSON.parse(readFileSync(new URL("./fixtures/kitchen.json", import.meta.url), "utf8"));
+    assert.doesNotThrow(() => validate(sample));
+    for (const key of Object.keys(sample)) assert.ok(key in SCHEMA.properties, key);
+  });
+
+  it("refuses a CI secret name a shell cannot export", () => {
+    assert.throws(() => resolve({ ...minimal, ci: { secrets: ["db-url"] } }), /ci\.secrets\[0\] must match/);
+  });
+
+  it("refuses an adapter that is neither a name nor an object", () => {
+    assert.throws(() => resolve({ ...minimal, adapters: { db: 7 } }), /adapters\.db must be string or object, not number/);
+  });
+});
+
+describe("validate", () => {
+  it("checks a value against any schema, not only the kitchen's", () => {
+    const schema = { type: "object", required: ["a"], additionalProperties: false, properties: { a: { type: "number" } } };
+    assert.doesNotThrow(() => validate({ a: 1 }, schema));
+    assert.throws(() => validate({}, schema), /a must be number, not undefined/);
+    assert.throws(() => validate({ a: 1, b: 2 }, schema), /b is not a key the kitchen reads/);
+    assert.throws(() => validate([], schema), /the file must be object, not array/);
+  });
 });

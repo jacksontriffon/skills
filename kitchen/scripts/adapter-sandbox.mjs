@@ -12,9 +12,19 @@ import {
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { at, ROOT } from "./layout.mjs";
 
-export const REAL = fileURLToPath(new URL("../../../", import.meta.url));
+export const REAL = ROOT;
+
+const ONLY_IN_THE_SOURCE = new Set(["skills", "agents", "workflows", "templates"]);
+
+export function copyKitchen(into) {
+  const from = join(REAL, at(".claude/kitchen"));
+  cpSync(from, into, {
+    recursive: true,
+    filter: (path) => !ONLY_IN_THE_SOURCE.has(path.slice(from.length + 1).split("/")[0]) && !path.includes("/node_modules"),
+  });
+}
 
 const PLUMBING = [
   "bash", "sh", "node", "git", "sed", "grep", "cat", "cp", "mkdir", "dirname", "basename", "env", "rm",
@@ -59,8 +69,8 @@ export function sandbox({ adapters = {}, expo = {}, files = {}, isolated = false
   git("config", "user.name", "t");
   git("config", "user.email", "t@example.com");
   mkdirSync(join(root, ".claude"), { recursive: true });
-  cpSync(join(REAL, ".claude/kitchen"), join(root, ".claude/kitchen"), { recursive: true });
-  const real = JSON.parse(readFileSync(join(REAL, ".claude/kitchen.json"), "utf8"));
+  copyKitchen(join(root, ".claude/kitchen"));
+  const real = JSON.parse(readFileSync(join(REAL, at(".claude/kitchen.json")), "utf8"));
   const config = {
     ...real,
     expo: { ...real.expo, ...expo },

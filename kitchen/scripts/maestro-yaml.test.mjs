@@ -8,7 +8,8 @@ import { parseAllDocuments } from "yaml";
 import { load } from "./kitchen.mjs";
 import { parseDocuments } from "./maestro-yaml.mjs";
 
-const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+import { ROOT, VENDORED } from "./layout.mjs";
+
 const SCRIPTS = fileURLToPath(new URL("./", import.meta.url));
 
 const reference = (text) => parseAllDocuments(text).map((document) => document.toJS());
@@ -21,7 +22,7 @@ const yamlUnder = (dir) =>
   });
 
 describe("every Maestro file in the project", () => {
-  const files = yamlUnder(join(ROOT, load().flows));
+  const files = yamlUnder(VENDORED ? join(ROOT, load().flows) : fileURLToPath(new URL("./fixtures/maestro", import.meta.url)));
 
   it("is found, so the comparison below is not over nothing", () => {
     assert.ok(files.length > 0);

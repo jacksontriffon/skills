@@ -11,7 +11,7 @@
 # table the branch added. A checkout with no node_modules is installed first.
 #
 # Every NAME=value line an adapter or a hook prints on stdout is exported to what runs after it,
-# because the container's own database and dictionary URLs are unreachable and dotenv never
+# because the container's own database and service URLs are unreachable and dotenv never
 # overrides a variable that is set. Anything run outside this script needs the same exports.
 #
 # .claude/session-up.d/ is the project's door: each executable in it runs in name order after

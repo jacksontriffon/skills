@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -16,17 +16,17 @@ import {
   surface,
 } from "./drive.mjs";
 import { load, resolve } from "./kitchen.mjs";
+import { ROOT, VENDORED } from "./layout.mjs";
 
 const header = "appId: com.example.app\n---\n";
 
-const MAESTRO_DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "../../..",
-  load().flows,
-);
+const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures/maestro");
 
-function checkedIn(directory) {
-  const dir = join(MAESTRO_DIR, directory);
+const MAESTRO_DIR = VENDORED ? join(ROOT, load().flows) : FIXTURE_DIR;
+
+function checkedIn(directory, root = MAESTRO_DIR) {
+  const dir = join(root, directory);
+  if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((name) => name.endsWith(".yaml"))
     .map((name) => {
@@ -379,14 +379,14 @@ describe("parseFlow", () => {
 
   it("reads scrollUntilVisible's element as the selector to bring into view", () => {
     const [command] = parseFlow(
-      `${header}- scrollUntilVisible:\n    element:\n      id: dictionary-kanji-label\n`,
+      `${header}- scrollUntilVisible:\n    element:\n      id: word-reading-label\n`,
       "gloss.yaml",
     ).commands;
 
     assert.equal(command.name, "scrollUntilVisible");
     assert.deepEqual(command.selector, {
       kind: "testId",
-      value: "dictionary-kanji-label",
+      value: "word-reading-label",
     });
   });
 
@@ -411,32 +411,18 @@ describe("parseFlow", () => {
   });
 });
 
-describe("the files checked in under .maestro", () => {
+describe("the files checked in under the flows folder", () => {
   it("parses every flow, so every command in one is a command this runner implements", () => {
-    assert.ok(checkedIn("flows").length >= 6);
+    assert.ok(checkedIn("flows").length >= 1);
   });
 
   it("parses every check, which the same runner drives", () => {
-    assert.ok(checkedIn("checks").length >= 1);
+    assert.doesNotThrow(() => checkedIn("checks"));
   });
 
-  it("taps no tab, since the app has no tab bar", () => {
-    const tabTaps = [...checkedIn("flows"), ...checkedIn("checks")].flatMap(
-      (flow) =>
-        flow.commands
-          .filter(
-            (c) =>
-              c.selector?.kind === "testId" && /^tab-/.test(c.selector.value),
-          )
-          .map((c) => `${c.file.split("/.maestro/")[1]} → ${c.selector.value}`),
-    );
-
-    assert.deepEqual(tabTaps, []);
-  });
-
-  it("leaves no command in this runner that no flow or check reaches for", () => {
+  it("leaves no command in this runner that the kitchen's fixture flows do not reach for", () => {
     const used = new Set(
-      [...checkedIn("flows"), ...checkedIn("checks")].flatMap((flow) =>
+      [...checkedIn("flows", FIXTURE_DIR), ...checkedIn("checks", FIXTURE_DIR)].flatMap((flow) =>
         flow.commands.map((c) => c.name),
       ),
     );
@@ -571,7 +557,7 @@ describe("flowPaths", () => {
   it("reads .maestro as the flows its config.yaml lists, leaving the checks out", async () => {
     const paths = await flowPaths(MAESTRO_DIR);
 
-    assert.ok(paths.length >= 6);
+    assert.ok(paths.length >= 1);
     assert.ok(paths.every((path) => path.includes("flows")));
     assert.ok(paths.some((path) => path.endsWith("home.yaml")));
     assert.equal(
@@ -581,7 +567,7 @@ describe("flowPaths", () => {
   });
 
   it("reads a directory with no config.yaml as the files directly in it", async () => {
-    const paths = await flowPaths(join(MAESTRO_DIR, "checks"));
+    const paths = await flowPaths(join(FIXTURE_DIR, "checks"));
 
     assert.ok(paths.length >= 1);
     assert.ok(paths.every((path) => path.endsWith(".yaml")));

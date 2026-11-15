@@ -2,6 +2,14 @@ import { fileURLToPath } from "node:url";
 
 import { escapeRegExp, load } from "./kitchen.mjs";
 
+const globPattern = (glob) =>
+  new RegExp(
+    `^${glob
+      .split("**")
+      .map((part) => part.split("*").map(escapeRegExp).join("[^/]*"))
+      .join(".*")}$`,
+  );
+
 // Nothing here compiles, gets linted, or has a test suite behind it. The format check only
 // reaches files inside a workspace package, so a stray space in a package README is the
 // most a skipped `format` can miss, and the push to main still catches it.
@@ -33,8 +41,14 @@ export function runners(kitchen = load()) {
         /^\.claude\/kitchen\/docs\/BLOCKERS\.core\.md$/,
       ],
     },
-    // The migration generator reads only packages/db: the schema, the migrations, its config.
-    migrations: { skip: [/./], keep: [/^packages\/db\//] },
+    // The migration check reads only the db adapter's own directory and the schema paths it names.
+    migrations: {
+      skip: [/./],
+      keep: [
+        ...(kitchen.adapters.db.dir ? [`${kitchen.adapters.db.dir.replace(/\/+$/, "")}/**`] : []),
+        ...(kitchen.adapters.db.paths ?? []),
+      ].map(globPattern),
+    },
     // An OTA preview is the Expo bundle plus the API it points at. Agent tooling, flows,
     // fixtures, edge functions and test files never reach either one.
     preview: {
@@ -48,7 +62,7 @@ export function runners(kitchen = load()) {
         /\.(test|manual)\.[cm]?[jt]sx?$/,
       ],
       keep: [
-        /^\.github\/workflows\/pr-preview\.yml$/,
+        /^\.github\/workflows\/kitchen-pr-preview\.yml$/,
         /^\.claude\/kitchen\/scripts\/is-(native|skippable)-change\.mjs$/,
       ],
     },

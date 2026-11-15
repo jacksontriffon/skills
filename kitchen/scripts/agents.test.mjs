@@ -14,7 +14,7 @@ import {
   withModel,
 } from "./agents.mjs";
 import { load, resolve } from "./kitchen.mjs";
-import { readSkill } from "./skill-shape.mjs";
+import { notCarried, readSkill } from "./skill-shape.mjs";
 
 const minimal = { repo: "acme/app", humans: { default: "owner" } };
 const configured = (agents) => resolve({ ...minimal, agents });
@@ -31,7 +31,7 @@ describe("every agent file is well formed", () => {
 
 describe("the loops dispatch named agents", () => {
   for (const skill of LOOP_DISPATCHERS) {
-    it(skill, () => {
+    it(skill, { skip: notCarried(skill) }, () => {
       const problems = dispatchProblems(skill, readSkill(skill), agentNames());
       assert.deepEqual(problems, [], problems.join("; "));
     });

@@ -11,9 +11,9 @@ import { sandbox, stubAdapter } from "./adapter-sandbox.mjs";
 import { CONTRACT } from "./adapter.mjs";
 import { load, SLOTS } from "./kitchen.mjs";
 
-const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+import { at, ROOT } from "./layout.mjs";
 const ADAPTER = fileURLToPath(new URL("./adapter.mjs", import.meta.url));
-const ADAPTERS = join(ROOT, ".claude/kitchen/adapters");
+const ADAPTERS = join(ROOT, at(".claude/kitchen/adapters"));
 
 const ERRORS_ACTIONS = ["top", "search"];
 const SHIPPED = ["posthog", "none"];
@@ -61,7 +61,7 @@ function assertMeetsContract(result, { adapter, action }) {
     assert.ok(Number.isInteger(json.window.days) && json.window.days > 0);
     assert.equal(json.window.from, `-${json.window.days}d`);
     assert.equal(typeof json.pins, "object");
-    assert.ok(existsSync(join(ROOT, json.guide)), `${json.guide} is not a file`);
+    assert.ok(existsSync(join(ROOT, at(json.guide))), `${json.guide} is not a file`);
   } else {
     assert.equal(typeof json.reason, "string");
     assert.ok(json.reason.length > 0 && !json.reason.includes("\n"));

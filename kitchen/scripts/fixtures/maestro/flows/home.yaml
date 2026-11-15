@@ -1,0 +1,8 @@
+appId: com.example.acme
+tags:
+  - home
+---
+- launchApp
+- assertVisible:
+    id: screen-home
+- takeScreenshot: home

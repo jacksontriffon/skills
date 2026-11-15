@@ -7,7 +7,10 @@ import { labelsFor as labelsForKitchen, owned, relabel as relabelForKitchen } fr
 const KITCHEN = resolve({
   repo: "someone/app",
   humans: { default: "someone" },
-  adapters: { evidenceHost: { use: "bucket", embedPrefixes: ["https://shots.example.org/bucket/"] } },
+  adapters: {
+    db: { use: "some-orm", paths: ["packages/db/src/schema.ts", "packages/db/src/schema/**", "packages/db/migrations/**"] },
+    evidenceHost: { use: "bucket", embedPrefixes: ["https://shots.example.org/bucket/"] },
+  },
 });
 const LABELS = owned(KITCHEN);
 const labelsFor = (change) => labelsForKitchen(change, KITCHEN);
@@ -35,6 +38,11 @@ describe("labelsFor", () => {
       labelsFor({ paths: ["packages/db/migrations/meta/_journal.json"] }),
       [LABELS.db],
     );
+  });
+
+  it("labels no db change for a db adapter that names no schema paths", () => {
+    const bare = resolve({ repo: "someone/app", humans: { default: "someone" } });
+    assert.deepEqual(labelsForKitchen({ paths: ["packages/db/migrations/0007_x.sql"] }, bare), []);
   });
 
   it("leaves the db client and the pre-squash archive unlabelled", () => {

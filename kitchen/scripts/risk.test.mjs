@@ -109,60 +109,29 @@ describe("the fixed kitchen floor", () => {
 });
 
 describe("the floors this repo's kitchen.json sets", () => {
-  const high = {
-    "packages/db/src/schema.ts": "packages/db/src/schema.ts",
-    "packages/db/src/schema/video.ts": "packages/db/src/schema/**",
-    "packages/db/migrations/0042_add_streak.sql": "packages/db/migrations/**",
-    "packages/auth/src/index.ts": "packages/auth/**",
-    "apps/nextjs/src/app/api/auth/[...all]/route.ts": "apps/nextjs/src/app/api/auth/**",
-    "packages/api/src/router/auth.ts": "packages/api/src/router/auth.ts",
-    "packages/api/src/trpc.ts": "packages/api/src/trpc.ts",
-    "packages/api/src/router/subscription.ts": "packages/api/src/router/subscription.ts",
-    "packages/api/src/router/tokens.ts": "packages/api/src/router/tokens.ts",
-    "packages/api/src/lib/token-pricing.ts": "packages/api/src/lib/token-**",
-    "packages/api/src/lib/credit-grant.ts": "packages/api/src/lib/credit-**",
-    "packages/api/src/lib/subscription-state.ts": "packages/api/src/lib/subscription**",
-    "packages/api/src/lib/revenuecat.ts": "packages/api/src/lib/revenuecat**",
-    "packages/api/src/lib/webhooks/revenuecat.ts": "packages/api/src/lib/webhooks/**",
-    "packages/api/src/lib/services/token-ledger.ts": "packages/api/src/lib/services/token-ledger**",
-    "packages/api/src/lib/services/subscription.ts": "packages/api/src/lib/services/subscription**",
-    "apps/nextjs/src/app/api/webhooks/mux/route.ts": "apps/nextjs/src/app/api/webhooks/**",
-  };
-  const medium = {
-    "docs/agents/loops.md": "docs/agents/**",
-    "CLAUDE.md": "CLAUDE.md",
-    "supabase/functions/process-clip/index.ts": "supabase/**",
-    "tooling/eslint/base.js": "tooling/**",
-    "turbo.json": "turbo.json",
-    "pnpm-workspace.yaml": "pnpm-workspace.yaml",
-    ".env.example": ".env.example",
+  const sample = (glob) => glob.replaceAll("**", "x/y.ts").replaceAll("*", "x");
+  const own = (glob, tier) => {
+    const { tier: got, reasons } = floor([change(sample(glob))], repoRisk);
+    return got === tier && reasons.includes(glob);
   };
 
-  it("holds auth, billing and the schema at high", () => {
-    for (const [path, glob] of Object.entries(high))
-      assert.deepEqual(floor([change(path)], repoRisk), { tier: "high", reasons: [glob] }, path);
+  it("holds a path under each high glob at high, naming the glob", () => {
+    assert.deepEqual(repoRisk.high.filter((glob) => !own(glob, "high")), []);
   });
 
-  it("holds docs, edge functions and build config at medium", () => {
-    for (const [path, glob] of Object.entries(medium))
-      assert.deepEqual(floor([change(path)], repoRisk), { tier: "medium", reasons: [glob] }, path);
-  });
-
-  it("lists a floor for every glob it names", () => {
-    assert.deepEqual(new Set(Object.values(high)), new Set(repoRisk.high));
-    assert.deepEqual(new Set(Object.values(medium)), new Set(repoRisk.medium));
-  });
-
-  it("leaves the db client and the pre-squash archive alone", () => {
-    assert.equal(floor([change("packages/db/src/client.ts")], repoRisk).tier, "low");
-    assert.equal(floor([change("packages/db/src/migrations/0042_old.sql")], repoRisk).tier, "low");
-  });
-
-  it("takes the highest tier and names every reason", () => {
+  it("holds a path under each medium glob at medium or above, naming the glob", () => {
     assert.deepEqual(
-      floor([change("pnpm-lock.yaml"), change("packages/db/src/schema/quiz.ts")], repoRisk),
-      { tier: "high", reasons: ["packages/db/src/schema/**", "dependencies"] },
+      repoRisk.medium.filter((glob) => !own(glob, "medium") && !own(glob, "high")),
+      [],
     );
+  });
+
+  it("takes the highest tier and names every reason", { skip: repoRisk.high.length === 0 && "this kitchen.json sets no high floor" }, () => {
+    const [glob] = repoRisk.high;
+    assert.deepEqual(floor([change("pnpm-lock.yaml"), change(sample(glob))], repoRisk), {
+      tier: "high",
+      reasons: [glob, "dependencies"],
+    });
   });
 });
 

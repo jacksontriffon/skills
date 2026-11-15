@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { checkShape, readSkill, UNATTENDED } from "./skill-shape.mjs";
+import { carried, checkShape, notCarried, readSkill, UNATTENDED, V2 } from "./skill-shape.mjs";
 
 describe("every unattended skill takes the template's shape", () => {
+  it("is carried by this checkout unless it waits for v2", () =>
+    assert.deepEqual(UNATTENDED.filter((name) => !carried(name) && !V2.includes(name)), []));
+
   for (const name of UNATTENDED) {
-    it(name, () => {
+    it(name, { skip: notCarried(name) }, () => {
       const problems = checkShape(name, readSkill(name));
       assert.deepEqual(problems, [], `${name}: ${problems.join("; ")}`);
     });

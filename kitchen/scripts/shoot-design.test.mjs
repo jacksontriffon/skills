@@ -5,10 +5,25 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-const SCRIPT = new URL("./shoot-design.sh", import.meta.url).pathname;
+function repoOfItsOwn(root, design = "designs") {
+  const scripts = join(root, ".claude/kitchen/scripts");
+  mkdirSync(scripts, { recursive: true });
+  for (const file of ["kitchen.mjs", "layout.mjs", "shoot-design.sh", "design-server.sh"])
+    cpSync(new URL(`./${file}`, import.meta.url), join(scripts, file));
+  cpSync(new URL("../kitchen.schema.json", import.meta.url), join(scripts, "../kitchen.schema.json"));
+  writeFileSync(
+    join(root, ".claude/kitchen.json"),
+    JSON.stringify({ repo: "someone/app", humans: { default: "someone" }, design }),
+  );
+  mkdirSync(join(root, design));
+  writeFileSync(join(root, design, "Sheet.dc.html"), "<html></html>");
+  execFileSync("git", ["init", "-q", root]);
+  return join(scripts, "shoot-design.sh");
+}
 
 function shoot(viewport, ...chips) {
   const root = mkdtempSync(join(tmpdir(), "shoot-design-"));
+  const SCRIPT = repoOfItsOwn(root);
   const log = join(root, "args.log");
   const stub = join(root, "capture.mjs");
   writeFileSync(
@@ -17,7 +32,7 @@ function shoot(viewport, ...chips) {
   );
   const printed = execFileSync(
     SCRIPT,
-    ["WordSheet.dc.html", viewport, join(root, "out"), ...chips],
+    ["Sheet.dc.html", viewport, join(root, "out"), ...chips],
     { encoding: "utf8", env: { ...process.env, CAPTURE: stub } },
   )
     .trim()
@@ -31,7 +46,7 @@ describe("shoot-design.sh", () => {
   it("names a rail chip's shot by its slug and shoots it at desktop", () => {
     const { printed, calls } = shoot("desktop", "06 VIDEO");
     assert.deepEqual(printed, ["06-video-design.png"]);
-    assert.match(calls[0], /^--desktop --url http:\/\/localhost:\d+\/WordSheet\.dc\.html --click 06 VIDEO --out /);
+    assert.match(calls[0], /^--desktop --url http:\/\/localhost:\d+\/Sheet\.dc\.html --click 06 VIDEO --out /);
   });
 
   it("clicks each step of a tap path in order, at phone size", () => {
@@ -50,16 +65,7 @@ describe("shoot-design.sh in a repo of its own", () => {
   it("shoots the export from the design folder kitchen.json names", () => {
     const repo = mkdtempSync(join(tmpdir(), "shoot-design-repo-"));
     const scripts = join(repo, ".claude/kitchen/scripts");
-    mkdirSync(scripts, { recursive: true });
-    for (const file of ["kitchen.mjs", "shoot-design.sh", "design-server.sh"])
-      cpSync(new URL(`./${file}`, import.meta.url), join(scripts, file));
-    writeFileSync(
-      join(repo, ".claude/kitchen.json"),
-      JSON.stringify({ repo: "someone/app", humans: { default: "someone" }, design: "designs" }),
-    );
-    mkdirSync(join(repo, "designs"));
-    writeFileSync(join(repo, "designs/Sheet.dc.html"), "<html></html>");
-    execFileSync("git", ["init", "-q", repo]);
+    repoOfItsOwn(repo);
 
     const log = join(repo, "args.log");
     const stub = join(repo, "capture.mjs");

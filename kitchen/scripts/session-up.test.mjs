@@ -29,11 +29,11 @@ async function project({ adapters = {}, install = false } = {}) {
     apply: "exit 0",
   });
   stubAdapter(sandboxed, "auth", "probe", {
-    seed: `${logLine(`auth seed ${seen("POSTGRES_URL", "MONGODB_URL")}`)}\necho AUTH_DEV_LOGIN=1`,
+    seed: `${logLine(`auth seed ${seen("POSTGRES_URL", "STORE_URL")}`)}\necho AUTH_DEV_LOGIN=1`,
     "sign-in": logLine(`auth sign-in ${seen("AUTH_DEV_LOGIN")}`),
   });
   stubAdapter(sandboxed, "stack", "probe", {
-    up: `${logLine(`stack up ${seen("POSTGRES_URL", "MONGODB_URL", "AUTH_DEV_LOGIN")}`)}\necho API_URL=http://localhost:4999`,
+    up: `${logLine(`stack up ${seen("POSTGRES_URL", "STORE_URL", "AUTH_DEV_LOGIN")}`)}\necho API_URL=http://localhost:4999`,
     down: logLine("stack down"),
   });
   if (adapters.db) {
@@ -102,12 +102,12 @@ describe("the core session-up.sh", () => {
 
   it("exports what each adapter prints to the ones after it, because the container's own URLs are unreachable", async () => {
     const { sandboxed, hook, up, down } = await project();
-    hook("10-dictionary", 'echo MONGODB_URL=local-mongo');
+    hook("10-store", 'echo STORE_URL=local-store');
     try {
       assert.equal(up().status, 0);
       const log = sandboxed.log();
-      assert.ok(log.includes("auth seed POSTGRES_URL=local-db MONGODB_URL=local-mongo"), log.join("\n"));
-      assert.ok(log.includes("stack up POSTGRES_URL=local-db MONGODB_URL=local-mongo AUTH_DEV_LOGIN=1"), log.join("\n"));
+      assert.ok(log.includes("auth seed POSTGRES_URL=local-db STORE_URL=local-store"), log.join("\n"));
+      assert.ok(log.includes("stack up POSTGRES_URL=local-db STORE_URL=local-store AUTH_DEV_LOGIN=1"), log.join("\n"));
       assert.ok(log.includes("auth sign-in AUTH_DEV_LOGIN=1"), log.join("\n"));
     } finally {
       down();
@@ -168,7 +168,7 @@ describe("the core session-up.sh", () => {
 
     it("fails the session when a hook does, before the seed", async () => {
       const { sandboxed, hook, up } = await project();
-      hook("10-broken", "echo no dictionary >&2; exit 3");
+      hook("10-broken", "echo no store >&2; exit 3");
       const run = up();
       assert.notEqual(run.status, 0);
       assert.match(run.stderr, /10-broken/);
