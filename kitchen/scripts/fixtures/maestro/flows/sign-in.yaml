@@ -1,0 +1,15 @@
+appId: com.example.acme
+tags:
+  - signed-in
+---
+- signInAs: dev@example.test
+- openLink: ${LINK_PREFIX}/settings
+- extendedWaitUntil:
+    visible:
+      id: screen-settings
+    timeout: 60000
+- tapOn: "Name"
+- inputText: "Ada"
+- waitForAnimationToEnd
+- assertNotVisible: "Saving"
+- takeScreenshot: settings

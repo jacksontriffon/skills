@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Bring a container-local Postgres to the schema, and print the URL that reaches it.
+#
+#   adapter.mjs db prepare   # prints POSTGRES_URL=<local url> on stdout, nothing else
+#
+# Installs the server when the container has none, starts the cluster when it is not answering,
+# creates the database when it is missing, then pushes the schema from the code in the checkout.
+# The push runs every time: a Before checkout can predate a table the branch added, and
+# `drizzle-kit push --force` drops what the checkout lacks, so each checkout pushes its own.
+#
+# The container exports POSTGRES_URL at a hosted pooler its proxy refuses. dotenv never overrides
+# a variable that is set, so the local URL is exported here as well as written to .env, and the
+# caller exports what this prints for everything it starts after.
+set -euo pipefail
+
+# shellcheck source=../../lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib.sh"
+
+DIR="$(setting settings.dir .)"
+DATABASE="$(setting settings.database app)"
+VERSION="$(setting settings.version 16)"
+LOCAL_URL="postgresql://postgres:postgres@localhost:5432/$DATABASE"
+
+log() { echo "postgres-drizzle: $*" >&2; }
+
+as_postgres() { su postgres -s /bin/bash -c "$1"; }
+
+if ! command -v pg_ctlcluster >/dev/null; then
+  log "installing postgresql-$VERSION"
+  apt-get install -y -qq "postgresql-$VERSION" >&2
+fi
+if ! pg_isready -q -h localhost -p 5432; then
+  pg_ctlcluster "$VERSION" main start >&2
+  waited=0
+  until pg_isready -q -h localhost -p 5432; do
+    if ((waited >= 30)); then log "postgres did not come up in 30s"; exit 1; fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+fi
+as_postgres "psql -qc \"alter user postgres password 'postgres'\"" >&2
+if ! as_postgres "psql -tAc \"select 1 from pg_database where datname = '$DATABASE'\"" | grep -q 1; then
+  as_postgres "createdb $DATABASE" >&2
+fi
+
+set_env POSTGRES_URL "$LOCAL_URL"
+export POSTGRES_URL="$LOCAL_URL"
+
+# The root script fails here: turbo refuses the interactive task.
+(cd "$REPO_ROOT/$DIR" && "${PM_EXEC[@]}" drizzle-kit push --force) >&2
+
+echo "POSTGRES_URL=$LOCAL_URL"

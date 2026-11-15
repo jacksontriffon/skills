@@ -1,0 +1,40 @@
+name: Kitchen · scripts
+
+# The kitchen's own tests, run against the copy this project vendors: a sync that broke a script,
+# or a kitchen.json it no longer accepts, fails here before a loop trips over it.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  FORCE_COLOR: 3
+
+jobs:
+  test:
+    runs-on: ${{ vars.KITCHEN_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Pick the Node version
+        id: node
+        run: echo "version=$(cat .nvmrc 2>/dev/null || cat .node-version 2>/dev/null || echo lts/*)" >>"$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+
+      - name: Install
+        run: .claude/kitchen/scripts/install.sh
+
+      - name: Validate kitchen.json
+        run: node .claude/kitchen/scripts/doctor.mjs --offline --only config
+
+      - name: Test the kitchen's scripts
+        run: node --test .claude/kitchen/scripts/*.test.mjs

@@ -1,0 +1,300 @@
+name: Kitchen · PR preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: 3
+
+jobs:
+  # A job-level `if` is what GitHub reports as Skipped, and a Skipped check satisfies a required
+  # one. Skipping steps inside `preview` would report a pass that published nothing.
+  reaches-app:
+    # A fork's pull_request runs without secrets, so the publish would fail on authentication
+    # rather than on anything diagnostic.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ vars.KITCHEN_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    outputs:
+      preview: ${{ steps.check.outputs.preview }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read the kitchen config
+        run: node .claude/kitchen/scripts/kitchen.mjs env >>"$GITHUB_ENV"
+
+      - name: Decide whether anything reaches the bundle or the API it points at
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          changed="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate --jq '.[].filename')"
+          if [ -z "$changed" ]; then
+            echo "the pull request reported no changed files, which cannot be true" >&2
+            exit 1
+          fi
+          reaches_app="$(printf '%s\n' "$changed" | node .claude/kitchen/scripts/is-skippable-change.mjs preview)"
+          if [ -z "$reaches_app" ]; then
+            echo "nothing here reaches the app, so there is no bundle to publish"
+            echo "preview=false" >>"$GITHUB_OUTPUT"
+          else
+            printf '%s\n' "$reaches_app"
+            echo "preview=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      # An earlier push may have left a QR comment or a native-change label this diff no longer earns.
+      - name: Say why there is no preview
+        if: steps.check.outputs.preview == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh pr edit "$PR" --remove-label "$KITCHEN_LABEL_NATIVE_CHANGE" 2>/dev/null || true
+          marker="<!-- pr-preview-status -->"
+          {
+            echo "$marker"
+            echo "**No preview QR for this PR (\`${SHA:0:7}\`). Nothing in it reaches the app.**"
+            echo
+            echo "Every changed file is docs, agent tooling, a flow, a fixture or a test, so"
+            echo "there is no new bundle to put on a phone."
+          } >comment.md
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq ".[] | select((.body // \"\") | startswith(\"$marker\")) | .id"); do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/comments/$id" || true
+          done
+          gh pr comment "$PR" --body-file comment.md
+
+  preview:
+    needs: reaches-app
+    if: needs.reaches-app.outputs.preview == 'true'
+    runs-on: ${{ vars.KITCHEN_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      deployments: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read the kitchen config
+        run: node .claude/kitchen/scripts/kitchen.mjs env >>"$GITHUB_ENV"
+
+      # An update carries only JavaScript, so a bundle built over native changes installs onto a
+      # phone at the same runtime version and crashes on the missing module.
+      - name: Refuse a native change
+        id: native
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          changed="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate --jq '.[].filename')"
+          if [ -z "$changed" ]; then
+            echo "the pull request reported no changed files, which cannot be true" >&2
+            exit 1
+          fi
+          native="$(printf '%s\n' "$changed" | node .claude/kitchen/scripts/is-native-change.mjs)"
+
+          # Only a dependency move can change the binary; a script or `main` rides in the bundle.
+          deps=false
+          if printf '%s\n' "$changed" | grep -qxF "$KITCHEN_APP_DIR/package.json"; then
+            gh api "repos/$GITHUB_REPOSITORY/contents/$KITCHEN_APP_DIR/package.json?ref=$BASE_SHA" \
+              --jq '.content' | base64 -d >base-pkg.json
+            gh api "repos/$GITHUB_REPOSITORY/contents/$KITCHEN_APP_DIR/package.json?ref=$HEAD_SHA" \
+              --jq '.content' | base64 -d >head-pkg.json
+            node .claude/kitchen/scripts/is-native-change.mjs deps-changed base-pkg.json head-pkg.json \
+              || deps=true
+          fi
+
+          # A device built from these native changes keeps the runtime version they shipped under,
+          # so any other PR at that version still publishes a bundle it would load. A native change
+          # has to move the version, in app.json or app.config.
+          if [ -n "$native" ]; then
+            version_at() {
+              for file in app.json app.config.ts app.config.js; do
+                body="$(gh api "repos/$GITHUB_REPOSITORY/contents/$KITCHEN_APP_DIR/$file?ref=$1" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null)" || continue
+                [ -n "$body" ] || continue
+                if [ "$file" = app.json ]; then
+                  printf '%s' "$body" | jq -r '.expo.version // .version // empty'
+                else
+                  printf '%s\n' "$body" | sed -n 's/^[[:space:]]*version:[[:space:]]*["'"'"']\([^"'"'"']*\)["'"'"'],\{0,1\}$/\1/p' | head -1
+                fi
+                return
+              done
+            }
+            base_version="$(version_at "$BASE_SHA")"
+            head_version="$(version_at "$HEAD_SHA")"
+            if [ -z "$head_version" ]; then
+              echo "could not read the app's version from $KITCHEN_APP_DIR/app.json or app.config" >&2
+              exit 1
+            fi
+            if [ "$base_version" = "$head_version" ]; then
+              echo "native change still on version $head_version:" >&2
+              printf '%s\n' "$native" | sed 's/^/    /' >&2
+              echo "Bump the app's version in this pull request, so no phone built from it loads an older bundle." >&2
+              exit 1
+            fi
+          fi
+
+          if [ -n "$native" ] || [ "$deps" = true ]; then
+            {
+              [ -z "$native" ] || printf '%s\n' "$native"
+              [ "$deps" = false ] || echo "$KITCHEN_APP_DIR/package.json (a dependency moved)"
+            } | sed 's/^/    /' >native.txt
+            echo "native changes:"
+            cat native.txt
+            echo "blocked=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "blocked=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      # A fixup push can turn a native change back into a plain one, so this runs every time.
+      - name: Label the PR by whether it needs a real build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BLOCKED: ${{ steps.native.outputs.blocked }}
+        run: |
+          if [ "$BLOCKED" = "true" ]; then
+            gh pr edit "$PR" --add-label "$KITCHEN_LABEL_NATIVE_CHANGE"
+          else
+            gh pr edit "$PR" --remove-label "$KITCHEN_LABEL_NATIVE_CHANGE" 2>/dev/null || true
+          fi
+
+      - name: Pick the Node version
+        if: steps.native.outputs.blocked == 'false'
+        id: node
+        run: echo "version=$(cat .nvmrc 2>/dev/null || cat .node-version 2>/dev/null || echo lts/*)" >>"$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v5
+        if: steps.native.outputs.blocked == 'false'
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+
+      - name: Install
+        if: steps.native.outputs.blocked == 'false'
+        run: .claude/kitchen/scripts/install.sh
+
+      # `eas update` reads no build profile, so what every EAS build ships reaches the update only
+      # from here: the EXPO_PUBLIC_ values in eas.json, then kitchen.json's ci.vars over them.
+      - name: Write the app's environment
+        if: steps.native.outputs.blocked == 'false'
+        env:
+          KITCHEN_SECRETS_JSON: ${{ toJSON(secrets) }}
+          KITCHEN_VARS_JSON: ${{ toJSON(vars) }}
+        run: node .claude/kitchen/scripts/ci-env.mjs --eas
+
+      # kitchen.json's ci.previewApi: `deployment` takes the URL of a GitHub deployment of the
+      # head (a host's branch alias is truncated, so it is read back rather than built), a URL is
+      # used as it is, and nothing leaves the app's own value alone.
+      - name: Point the update at the PR's API
+        if: steps.native.outputs.blocked == 'false' && env.KITCHEN_PREVIEW_API != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$KITCHEN_PREVIEW_API" != deployment ]; then
+            echo "$KITCHEN_API_URL_ENV=$KITCHEN_PREVIEW_API" >>"$GITHUB_ENV"
+            exit 0
+          fi
+          waited=0
+          url=""
+          while [ "$waited" -lt 900 ]; do
+            for id in $(gh api "repos/$GITHUB_REPOSITORY/deployments?sha=$SHA&per_page=100" --jq '.[].id'); do
+              url="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=100" \
+                --jq 'map(select(.state == "success" and .environment_url != null)) | first | .environment_url // empty')"
+              [ -n "$url" ] && break
+            done
+            [ -n "$url" ] && break
+            sleep 15
+            waited=$((waited + 15))
+          done
+          if [ -z "$url" ]; then
+            echo "no successful deployment for $SHA after ${waited}s" >&2
+            echo "the update would bake in an API host that serves nothing, so it is not published" >&2
+            exit 1
+          fi
+          echo "the preview API is $url"
+          echo "$KITCHEN_API_URL_ENV=$url" >>"$GITHUB_ENV"
+
+      - uses: expo/expo-github-action@v8
+        if: steps.native.outputs.blocked == 'false'
+        with:
+          eas-version: ^16.24.1
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Not `--auto`: it names the branch from git, and a pull_request checkout is detached. The
+      # message carries only the PR number and the sha — the title would be untrusted text in a shell.
+      - name: Publish the update
+        id: publish
+        if: steps.native.outputs.blocked == 'false'
+        uses: expo/expo-github-action/preview@v8
+        with:
+          working-directory: ${{ env.KITCHEN_APP_DIR }}
+          command:
+            eas update --branch pr-${{ github.event.pull_request.number }} --message "pr-${{
+            github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }}"
+            --platform ios
+          comment: false
+
+      - name: Post status comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          BLOCKED: ${{ steps.native.outputs.blocked }}
+          PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
+          UPDATE_COMMENT: ${{ steps.publish.outputs.comment }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          short_sha="${SHA:0:7}"
+          marker="<!-- pr-preview-status -->"
+          if [ "$BLOCKED" = "true" ]; then
+            {
+              echo "$marker"
+              echo "**No preview QR for this PR (\`$short_sha\`). It changes native code.**"
+              echo
+              echo "An update is a JS bundle. These are outside one:"
+              echo
+              cat native.txt
+              echo
+              echo 'Build it and reinstall on the device instead:'
+              echo
+              echo '```sh'
+              echo "$KITCHEN_PM install && cd $KITCHEN_APP_DIR && npx eas-cli@latest build --platform ios --profile development"
+              echo '```'
+            } >comment.md
+          elif [ "$PUBLISH_OUTCOME" = "success" ]; then
+            {
+              echo "$marker"
+              echo "$UPDATE_COMMENT"
+              echo
+              echo "_Commit \`$short_sha\`_"
+            } >comment.md
+          else
+            {
+              echo "$marker"
+              echo "**Preview build fails for \`$short_sha\`.**"
+              echo
+              echo "See the [workflow run]($RUN_URL) for details."
+            } >comment.md
+          fi
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq ".[] | select((.body // \"\") | startswith(\"$marker\")) | .id"); do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/comments/$id" || true
+          done
+          gh pr comment "$PR" --body-file comment.md

@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Seed the dev account and hand the session its credentials.
+#
+#   adapter.mjs auth seed   # prints the variables the servers need, and writes .claude/tmp/dev-user.json
+#
+# Runs the project's seed script (`seedScript`, a package script) with the dev-login flag on, which
+# the auth package refuses to register email-and-password sign-in without, then asks that script
+# for the account's email, so a per-run suffix (DEV_SEED_SUFFIX) is followed. dev-user.json holds
+# what `sign-in` signs in with: that email and the fixture's password, or AUTH_DEV_LOGIN_PASSWORD.
+#
+# A seed refuses a database it cannot tell is local, so DEV_SEED_DB_HOST is set to localhost when
+# POSTGRES_URL names this machine and left alone otherwise: typing a hosted host is the one thing
+# that tells a hosted dev database from a hosted production one.
+set -euo pipefail
+
+# shellcheck source=../../lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib.sh"
+
+SEED_SCRIPT="$(setting settings.seedScript)"
+FIXTURE="$(setting settings.fixture)"
+[[ -n "$SEED_SCRIPT" ]] || { echo "adapters.auth.seedScript names no package script to seed with" >&2; exit 1; }
+[[ -n "$FIXTURE" ]] || { echo "adapters.auth.fixture names no credentials file" >&2; exit 1; }
+
+export AUTH_DEV_LOGIN=1
+printed=("AUTH_DEV_LOGIN=1")
+set_env AUTH_DEV_LOGIN 1
+
+if [[ "${POSTGRES_URL:-}" =~ @(localhost|127\.0\.0\.1)[:/] ]]; then
+  export DEV_SEED_DB_HOST=localhost
+  printed+=("DEV_SEED_DB_HOST=localhost")
+  set_env DEV_SEED_DB_HOST localhost
+fi
+
+run_script() {
+  case "$PACKAGE_MANAGER" in
+    pnpm | bun) (cd "$REPO_ROOT" && "$PACKAGE_MANAGER" run "$SEED_SCRIPT" "$@") ;;
+    *) (cd "$REPO_ROOT" && "$PACKAGE_MANAGER" run "$SEED_SCRIPT" -- "$@") ;;
+  esac
+}
+
+run_script >&2
+email="$(run_script --email | tail -n1)"
+
+mkdir -p "$STATE_DIR"
+node -e '
+  const fixture = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
+  const user = { email: process.argv[2], password: process.env.AUTH_DEV_LOGIN_PASSWORD || fixture.password };
+  require("node:fs").writeFileSync(process.argv[3], JSON.stringify(user, null, 2) + "\n");
+' "$REPO_ROOT/$FIXTURE" "$email" "$STATE_DIR/dev-user.json"
+
+printf '%s\n' "${printed[@]}"

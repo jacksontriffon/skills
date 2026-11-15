@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jacksontriffon/skills/blob/main/kitchen/kitchen.schema.json",
+  "title": "kitchen.json",
+  "description": "Every value that differs between projects running the kitchen. A key left out takes the default here, so a fresh file holds only repo and humans.default.",
+  "type": "object",
+  "required": ["repo", "humans"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Where an editor finds this schema: ./kitchen/kitchen.schema.json from .claude/kitchen.json."
+    },
+    "repo": {
+      "type": "string",
+      "pattern": "^[\\w.-]+/[\\w.-]+$",
+      "x-message": "must be owner/name",
+      "description": "The GitHub repo the loops work in, as owner/name."
+    },
+    "product": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "The name a person reads. Null takes the repo's name."
+    },
+    "baseBranch": { "type": "string", "default": "main" },
+    "packageManager": {
+      "type": "string",
+      "enum": ["pnpm", "npm", "yarn", "bun"],
+      "default": "pnpm",
+      "description": "Every script and workflow runs commands through it."
+    },
+    "workspaceTool": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "The monorepo task runner `sync-skills.sh --init` found, if any. Null for a single app."
+    },
+    "humans": {
+      "type": "object",
+      "required": ["default"],
+      "additionalProperties": false,
+      "description": "Who a blocker an agent cannot fix is tagged to: an area's handle, else the default.",
+      "properties": {
+        "default": { "type": "string", "description": "A GitHub handle, with no @." },
+        "areas": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": { "type": "string" },
+          "description": "Area → handle, e.g. secrets, billing, connectors, database, native, design, product, merge."
+        }
+      }
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "blocked": { "type": "string", "default": "blocked" },
+        "needsHuman": { "type": "string", "default": "needs-human" },
+        "readyForHuman": { "type": "string", "default": "ready-for-human" },
+        "autoMerge": { "type": "string", "default": "auto-merge" },
+        "riskLow": { "type": "string", "default": "risk:low" },
+        "riskMedium": { "type": "string", "default": "risk:medium" },
+        "riskHigh": { "type": "string", "default": "risk:high" },
+        "urgent": { "type": "string", "default": "urgent" },
+        "needsTriage": { "type": "string", "default": "needs-triage" },
+        "needsInfo": { "type": "string", "default": "needs-info" },
+        "wontfix": { "type": "string", "default": "wontfix" },
+        "decision": { "type": "string", "default": "decision" },
+        "dbChange": { "type": "string", "default": "db-change" },
+        "skillChange": { "type": "string", "default": "skill-change" },
+        "dependsOnPr": { "type": "string", "default": "depends-on-pr" },
+        "evidence": { "type": "string", "default": "evidence" },
+        "nativeChange": { "type": "string", "default": "native-change" },
+        "claimed": { "type": "string", "default": "claimed" }
+      }
+    },
+    "conventions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "branch": { "type": "string", "default": "<initials>/<issue>-<slug>" },
+        "commit": { "type": "string", "default": "<gitmoji> <type>(#<issue>): <description>" },
+        "prTitle": { "type": "string", "default": "<gitmoji> <type>(#<issue>): <description>" }
+      }
+    },
+    "expo": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Where the Expo app is. Paths are from the repo root.",
+      "properties": {
+        "appDir": { "type": "string", "default": "." },
+        "routesDir": { "type": "string", "default": "app" },
+        "appId": { "type": ["string", "null"], "default": null },
+        "scheme": { "type": ["string", "null"], "default": null },
+        "webPort": { "type": "number", "default": 8081 },
+        "viewport": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "width": { "type": "number", "default": 390 },
+            "height": { "type": "number", "default": 844 }
+          }
+        },
+        "apiUrlEnv": { "type": "string", "default": "EXPO_PUBLIC_API_URL" },
+        "nativeDirs": { "type": "array", "items": { "type": "string" }, "default": ["ios", "android"] },
+        "easUpdate": { "type": "boolean", "default": true }
+      }
+    },
+    "flows": { "type": "string", "default": ".maestro", "description": "The Maestro folder." },
+    "design": { "type": "string", "default": "docs/design", "description": "The folder Claude Design exports land in." },
+    "adapters": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-unknown": "is not a slot the kitchen fills",
+      "description": "One adapter per slot: its name, or an object with `use` and that adapter's own settings.",
+      "properties": {
+        "stack": { "$ref": "#/$defs/adapter", "default": "supabase-local" },
+        "db": { "$ref": "#/$defs/adapter", "default": "supabase-migrations" },
+        "auth": { "$ref": "#/$defs/adapter", "default": "supabase-auth" },
+        "errors": { "$ref": "#/$defs/adapter", "default": "none" },
+        "evidenceHost": { "$ref": "#/$defs/adapter", "default": "git-branch" }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Floors a project adds above the kitchen's own, which it cannot lower.",
+      "properties": {
+        "high": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "medium": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "largeDiffLines": { "type": "number", "default": 400 }
+      }
+    },
+    "agents": {
+      "type": "object",
+      "default": {},
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "model": { "type": "string", "enum": ["inherit", "haiku", "sonnet", "opus"] }
+        }
+      }
+    },
+    "ci": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Runner labels. Workflows read them as the KITCHEN_RUNNER and KITCHEN_MAC_RUNNER repository variables.",
+      "properties": {
+        "runner": { "type": "string", "default": "ubuntu-latest" },
+        "macRunner": { "type": "string", "default": "macos-latest" },
+        "envFile": {
+          "type": "string",
+          "default": ".env",
+          "description": "The file a workflow writes the app's environment to, from the repo root. It starts as a copy of .env.example where one exists."
+        },
+        "secrets": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$" },
+          "default": [],
+          "description": "Repository secrets a workflow writes into envFile before it starts the app. A missing one fails the step and is named."
+        },
+        "vars": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$" },
+          "default": [],
+          "description": "Repository variables a workflow writes into envFile and exports to the job, for values that must survive into a printed URL, which a secret's masking would hide."
+        },
+        "previewApi": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "The API a preview update points expo.apiUrlEnv at: `deployment` waits for a GitHub deployment of the PR's head and takes its URL, a URL is used as it is, and null sets nothing."
+        }
+      }
+    },
+    "routines": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The names of the scheduled tasks /kitchen-setup creates.",
+      "properties": {
+        "work": { "type": "string", "default": "Kitchen work" },
+        "errors": { "type": "string", "default": "Kitchen errors" }
+      }
+    }
+  },
+  "$defs": {
+    "adapter": {
+      "type": ["string", "object"],
+      "required": ["use"],
+      "properties": {
+        "use": { "type": "string", "description": "An adapter under .claude/kitchen/adapters/<slot>/." }
+      }
+    }
+  }
+}

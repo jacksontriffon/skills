@@ -1,0 +1,3 @@
+interface:
+  display_name: "Design Setup"
+  short_description: "Write the design contract into a map's tickets"

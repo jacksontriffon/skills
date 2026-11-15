@@ -1,0 +1,95 @@
+{
+  "$schema": "../../kitchen.schema.json",
+  "repo": "acme/app",
+  "product": "Acme",
+  "humans": {
+    "default": "maintainer",
+    "areas": {
+      "secrets": "maintainer",
+      "billing": "maintainer",
+      "connectors": "maintainer",
+      "database": "maintainer",
+      "native": "maintainer",
+      "design": "maintainer",
+      "product": "maintainer",
+      "merge": "maintainer"
+    }
+  },
+  "expo": {
+    "appDir": "apps/mobile",
+    "routesDir": "apps/mobile/src/app",
+    "appId": "com.example.acme",
+    "scheme": "acme"
+  },
+  "adapters": {
+    "stack": {
+      "use": "trpc-next",
+      "dir": "apps/web",
+      "filter": "@app/web...",
+      "port": 3000
+    },
+    "db": {
+      "use": "postgres-drizzle",
+      "dir": "packages/db",
+      "database": "acme",
+      "version": 16,
+      "paths": [
+        "packages/db/src/schema.ts",
+        "packages/db/src/schema/**",
+        "packages/db/migrations/**"
+      ]
+    },
+    "auth": {
+      "use": "better-auth",
+      "seedScript": "dev:seed",
+      "fixture": "fixtures/dev-user.json"
+    },
+    "errors": {
+      "use": "posthog",
+      "organization": "00000000-0000-4000-8000-000000000000",
+      "project": 1001,
+      "projectName": "Acme",
+      "timezone": "Europe/Lisbon",
+      "decoyProject": 1002,
+      "doc": "docs/observability/error-tracking.md",
+      "events": "docs/observability/analytics-events.md"
+    },
+    "evidenceHost": {
+      "use": "git-branch"
+    }
+  },
+  "risk": {
+    "high": [
+      "packages/db/src/schema/**",
+      "packages/db/migrations/**",
+      "packages/auth/**",
+      "packages/api/src/billing/**"
+    ],
+    "medium": [
+      "docs/agents/**",
+      "CLAUDE.md",
+      "tooling/**",
+      ".env.example"
+    ],
+    "largeDiffLines": 400
+  },
+  "agents": {
+    "content-reviewer": {
+      "model": "haiku"
+    },
+    "design-reviewer": {
+      "model": "haiku"
+    },
+    "evidence-runner": {
+      "model": "haiku"
+    }
+  },
+  "ci": {
+    "runner": "ubuntu-24.04",
+    "macRunner": "macos-15"
+  },
+  "routines": {
+    "work": "Acme work",
+    "errors": "Acme errors"
+  }
+}

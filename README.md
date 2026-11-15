@@ -5,11 +5,15 @@ Claude Code skills that belong to no single project. One source of truth, consum
 | Skill | What it does |
 |---|---|
 | `business-metrics` | Reduces a business to seven dials, then its growth rate and profit ceiling at SOM |
-| `content-review` | Line-by-line review of a draft against nine rules — tense, voice, sentence length, word choice, cuts |
 | `grill-batch` | Resolves a queue of wayfinder decision tickets in one pass instead of one per session |
+| `tdd`, `grilling`, `grill-me`, `grill-with-docs`, `to-spec`, `to-tickets`, `triage`, `domain-modeling`, `codebase-design`, `diagnosing-bugs`, `prototype`, `research`, `resolving-merge-conflicts`, `handoff`, `teach`, `writing-great-skills`, `improve-codebase-architecture`, `setup-matt-pocock-skills` | A fork of [`mattpocock/skills`](https://github.com/mattpocock/skills) (MIT) — [`MATT-POCOCK-SKILLS.md`](MATT-POCOCK-SKILLS.md) has where each came from |
 
 `grill-batch` assumes the wayfinder map and ticket model from
-[`mattpocock/skills`](https://github.com/mattpocock/skills); the other two stand alone.
+[`mattpocock/skills`](https://github.com/mattpocock/skills). `content-review` moved into the
+kitchen, which is the only place it is used from: [`kitchen/skills/content-review`](kitchen/skills/content-review/SKILL.md).
+
+[`kitchen/`](#the-kitchen) is the other half of this repo: the loops that turn an issue into a
+merged PR with Before/After shots, for an Expo project. It is vendored, never installed.
 
 ## Using them
 
@@ -139,6 +143,64 @@ its directory.
 A skill earns its place when it carries no path, no convention, and no vocabulary from a single
 project. Anything that reaches for `docs/`, a tracker's labels, or a brand stays where it came
 from, until that reach becomes configuration.
+
+## The kitchen
+
+`kitchen/` is a software factory for an Expo app: an hourly Routine runs `/find-work`, which
+unblocks a stuck PR, drives an open one to hand-over, or builds the next ticket — and every PR it
+opens carries Before/After shots. A low-risk PR merges itself on green; the rest wait for a
+person. `/fix-top-error` runs the same way off the error tracker.
+
+| Part | Lands in a project at | What it is |
+|---|---|---|
+| `kitchen/skills/<name>/` | `.claude/skills/<name>/` | the loop skills, and `/kitchen-setup` |
+| `kitchen/agents/*.md` | `.claude/agents/` | the subagents the loops dispatch |
+| `kitchen/scripts/` | `.claude/kitchen/scripts/` | the scripts and their tests, `doctor.mjs` included |
+| `kitchen/adapters/` | `.claude/kitchen/adapters/` | one directory per backend, per slot |
+| `kitchen/docs/` | `.claude/kitchen/docs/` | the PR format, the loops, `BLOCKERS.core.md` and the ADRs |
+| `kitchen/kitchen.schema.json` | `.claude/kitchen/kitchen.schema.json` | what `.claude/kitchen.json` may say, and its defaults |
+| `kitchen/workflows/<name>.yml` | `.github/workflows/kitchen-<name>.yml` | previews, shooting, bootstrap, the scripts' tests |
+
+A project changes none of these files. Everything that differs between projects goes through one
+of four doors:
+
+1. **`.claude/kitchen.json`** — the repo, who owns what, labels, paths, risk floors, runners and
+   the app's CI environment. [`kitchen.schema.json`](kitchen/kitchen.schema.json) holds every key
+   and its default, so a fresh file is `repo` and `humans.default`.
+2. **An adapter per slot** — `stack`, `db`, `auth`, `errors` and `evidenceHost`. The defaults are
+   `supabase-local`, `supabase-migrations`, `supabase-auth`, `none` and `git-branch`; `custom`
+   points a slot at `.claude/adapters/<slot>/` in the project.
+3. **A project-owned file a skill names** — `.claude/BLOCKERS.md`, `docs/agents/*.md`, the flows
+   folder, and `kitchen-denylist.txt` at the repo root.
+4. **A hook** — `.claude/session-up.d/`, run in order when the app is stood up.
+
+A project that needs a fifth door files an issue here: a delta in a vendored kitchen file is a
+kitchen bug.
+
+### Setting it up
+
+After the sync lays the kitchen down, run `/kitchen-setup` in a Claude session. It asks for the
+repo, the owners per area, an adapter per slot, the error tracker's project and the design source;
+writes `kitchen.json` and the denylist; dispatches `kitchen-bootstrap.yml` for the labels; creates
+the hourly work Routine and the errors one; and prints what only a person can do. Then
+`node .claude/kitchen/scripts/doctor.mjs` until it is green — each failure names its row in
+[`BLOCKERS.core.md`](kitchen/docs/BLOCKERS.core.md#setting-up-the-kitchen).
+
+### Why not the plugin
+
+The kitchen stays out of [`.claude-plugin/`](.claude-plugin/). A plugin cannot carry workflows or
+a SessionStart hook, and the kitchen's merge gate must run from a pinned, reviewable copy.
+
+### Its CI
+
+[`validate.yml`](.github/workflows/validate.yml) runs every test under `kitchen/scripts/`, with
+the skill-shape, agent and adapter contract tests as their own steps, against a sample project in
+[`kitchen/scripts/fixtures/`](kitchen/scripts/fixtures/). The same tests run in each project
+against that project's own `kitchen.json`, through `kitchen-scripts.yml`. A project's denylist
+stays with the project, so [`check-kitchen-literals.mjs`](scripts/check-kitchen-literals.mjs)
+holds `kitchen/` and `skills/` to rules that need no list: no repo but this one and the upstreams
+it credits, no app id outside `com.example`, and the adapter vocabulary only under
+`kitchen/adapters/`.
 
 ## Licence
 

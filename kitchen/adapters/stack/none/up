@@ -1,0 +1,3 @@
+#!/bin/sh
+# An app with no API: there is nothing to start, and no API_URL to print.
+exit 0

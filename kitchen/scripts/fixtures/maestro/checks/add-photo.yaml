@@ -1,0 +1,18 @@
+appId: com.example.acme
+tags:
+  - check
+---
+- launchApp
+- runFlow:
+    file: shared/open-add.yaml
+    env:
+      SHEET: add
+- addMedia:
+    - ../fixtures/photo.jpg
+- swipe:
+    start: 50%, 80%
+    end: 50%, 20%
+- scrollUntilVisible:
+    element:
+      id: add-done
+- takeScreenshot: add-photo

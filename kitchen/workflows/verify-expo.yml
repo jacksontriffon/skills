@@ -1,0 +1,265 @@
+name: Kitchen · verify Expo
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Surface to verify on — ios needs the ENABLE_IOS_JOB repository variable
+        type: choice
+        options:
+          - ios
+        default: ios
+      flow:
+        description: Maestro flow to drive — a file under the flows folder, or the folder for every flow
+        type: string
+        default: ""
+      shot-prefix:
+        description: The PR number — the shots go to its evidence/<pr> branch
+        type: string
+        default: verify-expo
+      maestro:
+        description: The Maestro CLI release the flows are written against
+        type: string
+        default: "2.9.0"
+
+permissions:
+  contents: write
+
+env:
+  FORCE_COLOR: 3
+  # A fixed path rather than the default random one under $TMPDIR, so the Xcode DerivedData
+  # subfolder eas-cli's local build writes to (named from a hash of this path) is the same
+  # folder on every run — the precondition for the cache below to ever hit.
+  EAS_LOCAL_BUILD_WORKINGDIR: /Users/runner/eas-local-build
+  EAS_LOCAL_BUILD_SKIP_CLEANUP: "1"
+  MAESTRO_VERSION: ${{ inputs.maestro }}
+
+jobs:
+  # A flow file that does not parse fails Maestro before it touches a device, and the macOS job
+  # reaches the drive only after a pod install and a Release xcodebuild. Parsing every flow here
+  # costs a free runner a minute.
+  flows:
+    runs-on: ${{ vars.KITCHEN_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read the kitchen config
+        run: node .claude/kitchen/scripts/kitchen.mjs env >>"$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # get.maestro.mobile.dev installs whatever released last, and a release decides which keys
+      # a flow may carry, so the pinned version is downloaded directly.
+      - name: Install Maestro
+        run: |
+          curl -fsSL --retry 3 --retry-all-errors -o "$RUNNER_TEMP/maestro.zip" \
+            "https://github.com/mobile-dev-inc/maestro/releases/download/cli-$MAESTRO_VERSION/maestro.zip"
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro-dist"
+          mkdir -p "$HOME/.maestro"
+          cp -rf "$RUNNER_TEMP/maestro-dist/maestro/." "$HOME/.maestro/"
+          echo "$HOME/.maestro/bin" >>"$GITHUB_PATH"
+
+      - name: Parse every flow
+        run: |
+          # `config.yaml` is the workspace config `maestro test` reads rather than a flow.
+          mapfile -t flows < <(find "$KITCHEN_FLOWS" -name '*.yaml' ! -name 'config.yaml' | sort)
+          if [ "${#flows[@]}" -eq 0 ]; then
+            echo "no flow files under $KITCHEN_FLOWS" >&2
+            exit 1
+          fi
+          failed=0
+          for flow in "${flows[@]}"; do
+            if output="$(maestro check-syntax "$flow" 2>&1)"; then
+              echo "ok  $flow"
+            else
+              failed=1
+              echo "$flow"
+              echo "$output"
+              echo "::error file=$flow::${output//$'\n'/%0A}"
+            fi
+          done
+          exit "$failed"
+
+  # macOS bills at 10x on a private repo, so the job stays unreachable until a person sets
+  # ENABLE_IOS_JOB.
+  ios:
+    if: inputs.platform == 'ios' && vars.ENABLE_IOS_JOB == 'true'
+    needs: flows
+    runs-on: ${{ vars.KITCHEN_MAC_RUNNER || 'macos-latest' }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read the kitchen config
+        run: node .claude/kitchen/scripts/kitchen.mjs env >>"$GITHUB_ENV"
+
+      - name: Pick the Node version
+        id: node
+        run: echo "version=$(cat .nvmrc 2>/dev/null || cat .node-version 2>/dev/null || echo lts/*)" >>"$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+
+      - name: Install
+        run: .claude/kitchen/scripts/install.sh
+
+      - name: Write the app's environment
+        env:
+          KITCHEN_SECRETS_JSON: ${{ toJSON(secrets) }}
+          KITCHEN_VARS_JSON: ${{ toJSON(vars) }}
+        run: node .claude/kitchen/scripts/ci-env.mjs --eas
+
+      # The simulator shares the runner's loopback, and the app's API URL is inlined into the
+      # bundle at build time, so the stack is up before the build.
+      - name: Start the API
+        run: |
+          mkdir -p .claude/tmp
+          out="$(node .claude/kitchen/scripts/adapter.mjs stack up)"
+          printf '%s\n' "$out" | grep -v '^API_URL=' >>"$GITHUB_ENV" || true
+          api="$(printf '%s\n' "$out" | sed -n 's/^API_URL=//p' | tail -n1)"
+          if [ -n "$api" ]; then
+            echo "$KITCHEN_API_URL_ENV=$api" >>"$GITHUB_ENV"
+            echo "the API is $api"
+          else
+            echo "the stack adapter started no API"
+          fi
+
+      - name: Restore CocoaPods and DerivedData caches
+        id: native-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            ~/Library/Developer/Xcode/DerivedData
+          key: ios-native-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json', '**/yarn.lock', '**/bun.lock', format('{0}/app.json', env.KITCHEN_APP_DIR), format('{0}/app.config.*', env.KITCHEN_APP_DIR), format('{0}/eas.json', env.KITCHEN_APP_DIR)) }}
+
+      - name: Build the simulator app
+        id: build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::the EXPO_TOKEN repository secret is unset"
+            exit 1
+          fi
+          npm install --global eas-cli@^16.24.1
+          (cd "$KITCHEN_APP_DIR" && eas build \
+            --profile preview \
+            --platform ios \
+            --local \
+            --non-interactive \
+            --output "$RUNNER_TEMP/simulator-app.tar.gz")
+
+      - name: Save CocoaPods and DerivedData caches
+        if: steps.build.outcome == 'success' && steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            ~/Library/Developer/Xcode/DerivedData
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
+
+      - name: Boot a simulator
+        id: simulator
+        run: |
+          udid="$(xcrun simctl list devices available --json \
+            | jq -r '[.devices | to_entries[] | select(.key | contains("iOS"))
+                      | .value[] | select(.name | startswith("iPhone"))] | last | .udid')"
+          if [ -z "$udid" ] || [ "$udid" = "null" ]; then
+            xcrun simctl list devices available >&2
+            echo "no available iPhone simulator on this image" >&2
+            exit 1
+          fi
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid"
+          echo "udid=$udid" >>"$GITHUB_OUTPUT"
+
+      - name: Install the app
+        run: |
+          mkdir -p "$RUNNER_TEMP/app"
+          tar -xf "$RUNNER_TEMP/simulator-app.tar.gz" -C "$RUNNER_TEMP/app"
+          app="$(find "$RUNNER_TEMP/app" -maxdepth 2 -name '*.app' -print -quit)"
+          if [ -z "$app" ]; then
+            find "$RUNNER_TEMP/app" -maxdepth 3 >&2
+            echo "the build output carried no .app" >&2
+            exit 1
+          fi
+          xcrun simctl install "${{ steps.simulator.outputs.udid }}" "$app"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Maestro
+        run: |
+          curl -fsSL --retry 3 --retry-all-errors -o "$RUNNER_TEMP/maestro.zip" \
+            "https://github.com/mobile-dev-inc/maestro/releases/download/cli-$MAESTRO_VERSION/maestro.zip"
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro-dist"
+          mkdir -p "$HOME/.maestro"
+          cp -rf "$RUNNER_TEMP/maestro-dist/maestro/." "$HOME/.maestro/"
+          echo "$HOME/.maestro/bin" >>"$GITHUB_PATH"
+          mkdir -p .claude/tmp/shots
+
+      # Maestro writes each takeScreenshot into the working directory, which is why the flow
+      # path is absolute.
+      - name: Drive the flows
+        id: drive
+        working-directory: .claude/tmp/shots
+        continue-on-error: true
+        env:
+          FLOW: ${{ inputs.flow }}
+        run: |
+          maestro --device "${{ steps.simulator.outputs.udid }}" \
+            test "$GITHUB_WORKSPACE/${FLOW:-$KITCHEN_FLOWS}" \
+            --debug-output "$GITHUB_WORKSPACE/.claude/tmp/shots/maestro-debug" \
+            --flatten-debug-output \
+            -e "LINK_PREFIX=$KITCHEN_SCHEME:/"
+
+      - name: Photograph what the simulator was showing
+        if: always() && steps.drive.outcome == 'failure'
+        run: |
+          xcrun simctl io "${{ steps.simulator.outputs.udid }}" \
+            screenshot .claude/tmp/shots/drive-failure.png || true
+
+      - name: Upload the drive's debug output as a workflow artifact
+        if: always() && steps.drive.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-drive-failure-${{ github.run_id }}
+          path: .claude/tmp/shots
+          if-no-files-found: warn
+
+      - name: Push the shots to evidence/<pr>
+        if: always()
+        env:
+          SHOT_PREFIX: ${{ inputs.shot-prefix }}
+        run: |
+          shopt -s nullglob
+          shots=(.claude/tmp/shots/*.png)
+          if [ "${#shots[@]}" -eq 0 ]; then
+            echo "the run took no screenshots" >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          staged="$RUNNER_TEMP/evidence"
+          mkdir -p "$staged"
+          for shot in "${shots[@]}"; do
+            cp "$shot" "$staged/ios-$(basename "$shot")"
+          done
+          echo "## iOS simulator shots" >>"$GITHUB_STEP_SUMMARY"
+          echo >>"$GITHUB_STEP_SUMMARY"
+          .claude/kitchen/scripts/push-shots.sh "$SHOT_PREFIX" "$staged" | tee "$RUNNER_TEMP/urls.tsv"
+          awk -F'\t' '{ print "- [" $1 "](" $2 ")" }' "$RUNNER_TEMP/urls.tsv" >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Stop the API
+        if: always()
+        run: node .claude/kitchen/scripts/adapter.mjs stack down || true
+
+      - name: Fail if the drive failed
+        if: always() && steps.drive.outcome == 'failure'
+        run: exit 1

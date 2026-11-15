@@ -14,10 +14,17 @@ fail() {
 }
 
 shopt -s nullglob
-dirs=("$ROOT"/skills/*/)
+dirs=("$ROOT"/skills/*/ "$ROOT"/kitchen/skills/*/)
 
 if [ ${#dirs[@]} -eq 0 ]; then
-  echo "No skills found under skills/." >&2
+  echo "No skills found under skills/ or kitchen/skills/." >&2
+  exit 1
+fi
+
+# A sync lands both directories in one .claude/skills/, so one name in both is a collision.
+dupes="$(for dir in "${dirs[@]}"; do basename "$dir"; done | sort | uniq -d)"
+if [ -n "$dupes" ]; then
+  echo "skills/ and kitchen/skills/ both ship: $dupes" >&2
   exit 1
 fi
 

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Seed the dev account, starting the local stack first when it is down, since the admin API is the
+# stack's own and nothing else in the session guarantees it is up by now: a project whose db adapter
+# is not supabase-migrations has nothing before the seed that starts it.
+set -euo pipefail
+
+# shellcheck source=../../lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib.sh"
+# shellcheck source=../../lib-supabase.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib-supabase.sh"
+
+ensure_started
+exec node "$(dirname "${BASH_SOURCE[0]}")/seed.mjs" "$@"

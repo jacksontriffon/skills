@@ -1,0 +1,177 @@
+name: Kitchen · shoot Expo web
+
+# A person's way to shoot a flow on a runner. /evidence does not use it: it shoots in the agent's
+# own container with the same shoot-pair.sh, which stands each half up through session-up.sh and
+# the adapters kitchen.json names. A run here pushes its shots to evidence/<pr> with the same
+# push-shots.sh.
+on:
+  workflow_dispatch:
+    inputs:
+      flow:
+        description: Flow to drive — a file under the flows folder, or a folder for every flow in it
+        type: string
+        required: true
+      shot-prefix:
+        description: The PR number — the shots go to its evidence/<pr> branch
+        type: string
+        required: true
+      before:
+        description: Shoot the Before half on the merge-base too
+        type: boolean
+        default: true
+      timeout:
+        description: Milliseconds a selector may take to appear
+        type: string
+        default: "60000"
+      voice:
+        description: Speech language to stub in the page, so a speaker button shows — e.g. en-US
+        type: string
+        default: ""
+      hold:
+        description: API request to keep in flight, so a pending state shows
+        type: string
+        default: ""
+      hold-ms:
+        description: Milliseconds the held request waits before it goes on
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+env:
+  FORCE_COLOR: 3
+
+jobs:
+  shoot:
+    runs-on: ${{ vars.KITCHEN_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 45
+    steps:
+      # The Before half runs on the merge-base, which a shallow clone cannot reach.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Read the kitchen config
+        run: node .claude/kitchen/scripts/kitchen.mjs env >>"$GITHUB_ENV"
+
+      - name: Pick the Node version
+        id: node
+        run: echo "version=$(cat .nvmrc 2>/dev/null || cat .node-version 2>/dev/null || echo lts/*)" >>"$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+
+      - name: Install
+        run: .claude/kitchen/scripts/install.sh
+
+      - name: Install the browser drive.mjs drives
+        run: npx --no-install playwright install --with-deps chromium
+
+      # Only the names kitchen.json's ci.secrets and ci.vars list are written, and a missing one
+      # fails here, by name, rather than as a blank screen three steps later.
+      - name: Write the app's environment
+        env:
+          KITCHEN_SECRETS_JSON: ${{ toJSON(secrets) }}
+          KITCHEN_VARS_JSON: ${{ toJSON(vars) }}
+        run: node .claude/kitchen/scripts/ci-env.mjs --eas
+
+      - name: List the flows
+        id: flows
+        env:
+          FLOW: ${{ inputs.flow }}
+        run: |
+          if [ -d "$FLOW" ]; then
+            mapfile -t flows < <(find "$FLOW" -name '*.yaml' ! -name 'config.yaml' ! -path '*/shared/*' | sort)
+          elif [ -f "$FLOW" ]; then
+            flows=("$FLOW")
+          else
+            echo "::error::$FLOW is neither a flow file nor a folder on this ref"
+            exit 1
+          fi
+          if [ "${#flows[@]}" -eq 0 ]; then
+            echo "::error::no flow under $FLOW"
+            exit 1
+          fi
+          printf '%s\n' "${flows[@]}" >"$RUNNER_TEMP/flows.txt"
+          printf '%s\n' "${flows[@]}"
+
+      # What a flow needs beyond the account — a fixture store, say — is the project's own step.
+      - name: Prepare what the flows need
+        run: |
+          if [ -x .claude/scripts/shoot-prepare.sh ]; then
+            mapfile -t flows <"$RUNNER_TEMP/flows.txt"
+            .claude/scripts/shoot-prepare.sh "${flows[@]}"
+          fi
+
+      - name: Drive the flows
+        id: drive
+        continue-on-error: true
+        env:
+          BEFORE: ${{ inputs.before }}
+          TIMEOUT: ${{ inputs.timeout }}
+          SHOOT_VOICE: ${{ inputs.voice }}
+          SHOOT_HOLD: ${{ inputs.hold }}
+          SHOOT_HOLD_MS: ${{ inputs.hold-ms }}
+        run: |
+          mapfile -t flows <"$RUNNER_TEMP/flows.txt"
+          args=(--timeout "$TIMEOUT")
+          [ -z "$SHOOT_VOICE" ] || args+=(--voice "$SHOOT_VOICE")
+          [ -z "$SHOOT_HOLD" ] || args+=(--hold "$SHOOT_HOLD")
+          [ -z "$SHOOT_HOLD_MS" ] || args+=(--hold-ms "$SHOOT_HOLD_MS")
+          mkdir -p "$RUNNER_TEMP/shots"
+          if [ "$BEFORE" = true ]; then
+            DRIVE_ARGS="${args[*]}" .claude/kitchen/scripts/shoot-pair.sh "$RUNNER_TEMP/shots" "${flows[@]}"
+          else
+            url="$(.claude/kitchen/scripts/session-up.sh up)"
+            status=0
+            for flow in "${flows[@]}"; do
+              node .claude/kitchen/scripts/drive.mjs "$flow" --shots "$RUNNER_TEMP/shots" --url "$url" "${args[@]}" || status=1
+            done
+            .claude/kitchen/scripts/session-up.sh down || true
+            exit "$status"
+          fi
+
+      # dev-server.sh tails this itself only when `start` fails. A drive that dies against a
+      # server which started fine leaves the reason here and nowhere else.
+      - name: Show the dev server log
+        if: steps.drive.outcome == 'failure'
+        run: tail -150 .claude/tmp/dev-server.log || echo "no dev-server.log"
+
+      - name: Upload the shots as a workflow artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: expo-web-shots-${{ github.run_id }}
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: warn
+
+      # A shot a failed flow leaves is a shot: where a base without the feature stopped is that
+      # feature's Before. Only a run that photographed nothing at all has nothing to post.
+      - name: Push the shots to evidence/<pr>
+        if: always()
+        env:
+          SHOT_PREFIX: ${{ inputs.shot-prefix }}
+        run: |
+          shopt -s nullglob globstar
+          shots=("$RUNNER_TEMP"/shots/**/*.png)
+          if [ "${#shots[@]}" -eq 0 ]; then
+            echo '::error::the run took no screenshots — the drive failed before it photographed anything. Raise the timeout input, or check that the flow reaches its first assertion.'
+            echo "the run took no screenshots" >>"$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          {
+            echo "## Shots"
+            echo
+            echo "| File | URL |"
+            echo "| --- | --- |"
+          } >>"$GITHUB_STEP_SUMMARY"
+          .claude/kitchen/scripts/push-shots.sh "$SHOT_PREFIX" "$RUNNER_TEMP/shots" | tee "$RUNNER_TEMP/urls.tsv"
+          awk -F'\t' '{ print "| " $1 " | " $2 " |" }' "$RUNNER_TEMP/urls.tsv" >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Report a drive that walked into a wall
+        if: always() && steps.drive.outcome == 'failure'
+        run: |
+          echo "::warning::a drive did not finish its flow — the shots it took before that are still above"
+          tail -50 .claude/tmp/dev-server.log || true

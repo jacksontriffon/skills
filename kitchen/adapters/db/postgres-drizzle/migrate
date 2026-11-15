@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Write a migration from the schema, and refuse one that is not an expand.
+#
+#   adapter.mjs db migrate --name <what_it_does> [--custom]
+#
+# Prints the tag it wrote on stdout, or nothing when the schema has not changed. `generate` diffs
+# the schema against the last snapshot and never connects, so the placeholder URL is enough when
+# the environment has none.
+set -euo pipefail
+
+# shellcheck source=../../lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib.sh"
+HERE="$(dirname "${BASH_SOURCE[0]}")"
+
+DIR="$(setting settings.dir .)"
+MIGRATIONS="$REPO_ROOT/$(setting settings.migrations "$DIR/migrations")"
+
+name=""
+custom=()
+while (($# > 0)); do
+  case "$1" in
+    --name) name="${2:-}"; shift 2 ;;
+    --custom) custom=(--custom); shift ;;
+    *) echo "usage: adapter.mjs db migrate --name <what_it_does> [--custom]" >&2; exit 2 ;;
+  esac
+done
+[[ -n "$name" ]] || { echo "migrate needs --name <what_it_does>" >&2; exit 2; }
+
+[[ "$name" =~ ^[a-z0-9_]+$ ]] || { echo "--name $name is not a name a migration tag can carry: it holds [a-z0-9_] and nothing else, so \`pending\` can read it back" >&2; exit 2; }
+
+before="$(node -e 'console.log(JSON.parse(require("node:fs").readFileSync(process.argv[1] + "/meta/_journal.json", "utf8")).entries.map((e) => e.tag).join(" "))' "$MIGRATIONS")"
+# shellcheck disable=SC2086
+(cd "$REPO_ROOT/$DIR" && POSTGRES_URL="${POSTGRES_URL:-postgres://offline@localhost:5432/none}" \
+  "${PM_EXEC[@]}" drizzle-kit generate --name "$name" "${custom[@]}") >&2
+
+# shellcheck disable=SC2086
+node "$HERE/../expand.mjs" "$MIGRATIONS" $before

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Start the local stack if it is not running, and print `API_URL=<its API URL>`.
+#
+# `supabase start` runs only when `status` says the stack is down, so a second call starts nothing.
+# The URL is also recorded in .claude/tmp/dev-server.api.url, where the sign-in and the drive look
+# for it. With `keyEnv` set, the stack's publishable key (the anon key on a CLI that has no
+# publishable one) is printed under that name too, and the core hands it to the app with the URL.
+set -euo pipefail
+
+# shellcheck source=../../lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib.sh"
+# shellcheck source=../../lib-supabase.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib-supabase.sh"
+
+KEY_ENV="$(setting settings.keyEnv)"
+
+ensure_started
+url="$(status_value API_URL)"
+[[ -n "$url" ]] || fail "\`supabase status\` printed no API_URL"
+
+mkdir -p "$STATE_DIR"
+echo "$url" >"$STATE_DIR/dev-server.api.url"
+echo "API_URL=$url"
+
+if [[ -n "$KEY_ENV" ]]; then
+  key="$(status_value PUBLISHABLE_KEY)"
+  [[ -n "$key" ]] || key="$(status_value ANON_KEY)"
+  [[ -n "$key" ]] || fail "\`supabase status\` printed no PUBLISHABLE_KEY or ANON_KEY for $KEY_ENV"
+  echo "$KEY_ENV=$key"
+fi

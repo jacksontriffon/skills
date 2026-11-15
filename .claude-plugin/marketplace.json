@@ -5,7 +5,7 @@
     {
       "name": "jacksontriffon-skills",
       "source": "./",
-      "description": "Portable Claude Code skills — Arc-style landing page UI, line-by-line content review, and batch decision resolution."
+      "description": "Portable Claude Code skills — a fork of mattpocock/skills (TDD, grilling, specs to tickets, triage, diagnosis), business metrics, and batch decision resolution."
     }
   ]
 }

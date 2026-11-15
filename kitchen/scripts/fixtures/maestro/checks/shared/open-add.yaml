@@ -1,0 +1,4 @@
+appId: com.example.acme
+---
+- tapOn:
+    id: open-${SHEET}
