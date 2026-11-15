@@ -1,0 +1,6 @@
+appId: {{APP_ID}}
+tags:
+  - home
+---
+- openLink: ${LINK_PREFIX}/
+- takeScreenshot: home
