@@ -1,0 +1,13 @@
+{
+  "name": "jacksontriffon-skills",
+  "private": true,
+  "description": "Test dependencies for the kitchen's scripts. Nothing here ships: a project brings its own Playwright.",
+  "scripts": {
+    "test": "node --test kitchen/scripts/*.test.mjs scripts/*.test.mjs",
+    "check:literals": "node scripts/check-kitchen-literals.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.58.2",
+    "yaml": "2.9.0"
+  }
+}

@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  FORCE_COLOR: 3
+
 jobs:
   skills:
     runs-on: ubuntu-latest
@@ -12,3 +15,56 @@ jobs:
       - uses: actions/checkout@v4
       - run: ./scripts/validate-skills.sh
       - run: bash -n scripts/sync-skills.sh
+
+      - name: Keep the kitchen out of the plugin
+        run: |
+          if grep -rn 'kitchen' .claude-plugin/; then
+            echo "::error::the plugin manifest names the kitchen, which a plugin cannot carry: its workflows and SessionStart hook arrive only by sync"
+            exit 1
+          fi
+
+  kitchen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # drive.test.mjs imports playwright's module, and maestro-yaml.test.mjs checks the flow
+      # parser against the yaml package. Neither launches a browser, so none is installed.
+      - name: Install the test dependencies
+        run: npm ci
+
+      - name: No project named in kitchen/ or skills/
+        run: |
+          node scripts/check-kitchen-literals.mjs
+          node --test scripts/check-kitchen-literals.test.mjs
+
+      - name: Skill shape
+        run: node --test kitchen/scripts/skill-shape.test.mjs
+
+      - name: Agents
+        run: |
+          node --test kitchen/scripts/agents.test.mjs
+          node kitchen/scripts/agents.mjs check
+
+      - name: Adapter contracts
+        run: node --test kitchen/scripts/adapter*.test.mjs
+
+      - name: Every other kitchen script
+        run: |
+          mapfile -t tests < <(ls kitchen/scripts/*.test.mjs | grep -v -e '/skill-shape\.test\.mjs$' -e '/agents\.test\.mjs$' -e '/adapter[^/]*\.test\.mjs$')
+          node --test "${tests[@]}"
+
+      - name: sync-skills.sh
+        run: |
+          shopt -s nullglob
+          tests=(scripts/tests/*.test.mjs)
+          if [ "${#tests[@]}" -eq 0 ]; then
+            echo "no scripts/tests yet: they arrive with the sync slice"
+          else
+            node --test "${tests[@]}"
+          fi
