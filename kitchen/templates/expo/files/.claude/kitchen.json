@@ -2,6 +2,7 @@
   "$schema": "./kitchen/kitchen.schema.json",
   "repo": "{{REPO}}",
   "packageManager": "{{PACKAGE_MANAGER}}",
+  "workspaceTool": "{{WORKSPACE_TOOL}}",
   "humans": {
     "default": "{{HUMAN}}"
   },

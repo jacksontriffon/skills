@@ -177,6 +177,7 @@ const STARTERS = [
   'docs/agents/domain.md',
   '.maestro/config.yaml',
   '.maestro/flows/home.yaml',
+  '.maestro/README.md',
   'docs/design/README.md',
   'docs/design/DEVIATIONS.md',
   'CLAUDE.md',
@@ -458,6 +459,7 @@ test('--init expo into a create-expo-app repo writes the starter files', (t) => 
   assert.equal(kitchen.repo, 'example-org/my-app');
   assert.equal(kitchen.packageManager, 'npm');
   assert.match(r.out, /Workspace tool:\s+none/);
+  assert.ok(!('workspaceTool' in kitchen), 'a single app leaves workspaceTool to its null default');
   assert.deepEqual(kitchen.expo, {
     appDir: '.', routesDir: 'app', appId: 'com.example.myapp', scheme: 'myapp', nativeDirs: ['ios', 'android'],
   });
@@ -481,6 +483,7 @@ test('--init expo into a pnpm monorepo finds the app in its workspace', (t) => {
   const kitchen = json(path.join(root, '.claude/kitchen.json'));
   assert.equal(kitchen.packageManager, 'pnpm');
   assert.match(r.out, /Workspace tool:\s+turbo/);
+  assert.equal(kitchen.workspaceTool, 'turbo');
   assert.deepEqual(kitchen.expo, {
     appDir: 'apps/mobile',
     routesDir: 'apps/mobile/src/app',
@@ -563,6 +566,7 @@ test('--init asks rather than guesses when there is no Expo app or more than one
   assert.equal(kitchen.expo.appDir, 'apps/two');
   assert.equal(kitchen.packageManager, 'yarn');
   assert.match(r3.out, /Workspace tool:\s+yarn-workspaces/);
+  assert.equal(kitchen.workspaceTool, 'yarn-workspaces');
 });
 
 test('--init with no lockfile records pnpm', (t) => {
